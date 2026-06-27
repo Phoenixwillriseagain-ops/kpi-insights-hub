@@ -86,7 +86,7 @@ jobs:
           <html lang="en">
             <head>
               <meta charset="UTF-8" />
-              <base href="./" />
+              <base href="/kpi-insights-hub/" />
               <meta name="viewport" content="width=device-width, initial-scale=1.0" />
               <title>Pulse · KPI & Breaches Analyzer</title>
               <meta name="description" content="Modern interactive dashboard for SLA breaches: monthly trends, weekly heat, queue drill-down and exclusion crosscheck — all in your browser." />
