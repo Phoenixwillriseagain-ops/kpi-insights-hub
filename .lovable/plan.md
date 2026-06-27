@@ -1,41 +1,73 @@
-# Dashboard Upgrade Plan
+# Plan — Pulse v2: clearer trends + PCms integration
 
-## 1. Weekly Trend → Line Chart with labels
-- Replace the current weekly Bar chart with a Recharts `LineChart`.
-- X axis: week label (e.g. `W23 '26`) using existing `weekLabel()` helper.
-- Y axis: KPI % (hidden ticks, since labels live on points).
-- Add a `<LabelList>` on the line showing the percentage value above each point (e.g. `96.4%`), color-matched to RAG status per dot.
-- Keep target reference line (dashed) and RAG-colored dots.
-- Tooltip keeps total / breaches / rate breakdown.
+## 1. Re-label the three upload slots
 
-## 2. Export functionality
-Two export surfaces:
+Keep three slots, with explicit roles:
 
-**A. Chart image export (PNG / JPEG)**
-- Add a small "Export" menu (dropdown) on every chart card (Overview sparkline area, Trends line & monthly bar, Queue chart, Exclusion Impact chart).
-- Use `html-to-image` (lightweight, no canvas server deps) to render the chart container to PNG or JPEG.
-- File name pattern: `pulse_<view>_<kpi>_<yyyymmdd>.png`.
+1. **SLA Overall** — `V2-breaches.xlsx`-style workbook. One sheet per KPI (KSL-4, KM-1, KSL-5a, KM-2, KSL-5b, …) with `Excluded` flag per row. This is the source for all KPI rates (existing parser already handles it).
+2. **Exclusions register** — optional override list of ticket IDs to exclude on top of the per-row flag (unchanged behavior, just renamed in UI).
+3. **KSL-5b Deep-dive (PCms)** — `NEW PCms file.xlsx`. New parser reads the `Summary` sheet (per-ticket reason category 1–11) and `Overall` sheet (Week / Month / Ticket / Reason / Agent / BMS ID / NOK/KO / Unique).
 
-**B. Report export**
-- Top-bar "Export report" button with two options:
-  - **CSV** — current view's underlying data (overall by KPI, weekly series, queue breakdown, exclusion impact) zipped into one `.csv` per section via a single multi-sheet `.xlsx` produced with the already-installed `xlsx` lib.
-  - **PDF snapshot** — capture the active view's main container with `html-to-image` → embed into a single-page PDF using `jspdf` (auto-scaled to A4 landscape).
-- Respects current month filter and selected KPI.
+Upload card copy and helper text updated; old "Enriched breaches" wording removed.
 
-## 3. Other improvements
-- **Sticky header + view tabs** so navigation stays visible when scrolling long queue lists.
-- **Empty / partial-upload state** clarifying which file is still missing (currently only a generic prompt).
-- **KPI search / filter chips** above the KPI grid (filter by family: All / KSL / KM, plus free-text search by code).
-- **Compare mode toggle** on Trends: overlay the previous 6-week window as a faint line for quick delta reading.
-- **Accessibility**: add `aria-label`s to chart export buttons and ensure RAG colors also encode via icon (●/▲/■) for color-blind users.
-- **Persist last-used month + KPI** in `sessionStorage` so a refresh keeps context (no data persistence — only UI state).
+## 2. New parser + data model for PCms
+
+New module `src/lib/analyzer/parsePcms.ts`:
+
+- Reads the `Overall` sheet (canonical), falls back to `Summary` if missing.
+- Normalizes: `{ ticket, week, month, reason, category (1–11), agent, bmsId, status (KO/NOK), unique }`.
+- Derives `category` from the reason prefix (`"2. KO Missing 5-days template"` → category `2 — Communication`) using a small map matching the workbook's 11 buckets.
+- ISO month/week normalized to match the SLA dataset keys so they can be cross-filtered by the same period chip.
+
+Extended `Dataset` type gets `pcms: PcmsRow[]` and helper selectors:
+`pcmsByCategory(month)`, `pcmsTopAgents(month, n)`, `pcmsWeekly(lastN)`.
+
+## 3. Fix the unreadable weekly chart
+
+In `WeeklySection`:
+
+- Reduce inline annotations: keep the value label above each point; **move ±pp deltas out of the chart** into the table.
+- Increase y-axis padding (min/max ±1pp) so labels don't collide with the axis.
+- Slightly larger left margin and a `dy` offset for the value label.
+- For very dense values (<1pp gap between adjacent points), only show the value label, never the delta arrow.
+
+Below every weekly chart, render a **companion data table** (always visible, responsive: side-by-side ≥1280px, stacked below):
+
+| Week | Total | Breaches | Rate | Δ vs prev | Status |
+
+Status uses the same RAG dot. Both the chart and the table sit inside the same `Panel` so the existing PNG/JPEG/CSV exports capture them together.
+
+## 4. KSL-5b deep-dive section (new tab "KSL-5b Detail")
+
+Only enabled when the PCms file is uploaded. Sections:
+
+1. **Reason mix (stacked bar)** — by month (default) or week toggle, 11 categories stacked, 100%-stacked switch. Legend is interactive (click to isolate a category).
+2. **Top agents by KO count** — horizontal bar, top 10, with hover tooltip showing reason breakdown for that agent; click a bar to filter the drill table.
+3. **KSL-5b weekly trend overlay** — the existing KSL-5b line chart gets a secondary axis bar series = PCms KO count per week, so dips in conformity visually align with KO spikes.
+4. **Reason-category drill table** — virtualized table (ticket / week / month / reason / agent / status), with category and agent filter chips, search box, and CSV export.
+
+All four panels respect the global month chip and have their own PNG/JPEG export menu.
+
+## 5. Interaction polish (modern dashboard feel)
+
+- Period chips become a sticky sub-header with a "compare to previous" toggle that drives Δ columns globally.
+- Cross-filter: clicking an agent or category anywhere filters all KSL-5b Detail panels (local state, resettable with a "Clear filters" pill).
+- Empty states for each PCms panel ("Upload the PCms file to see this view") with a button that focuses slot 3.
+- Keyboard: Tab order across slots → period chips → tabs → panels; `?` opens a small shortcuts popover (g o / g w / g m / g q / g 5).
+
+## 6. Exports
+
+- Per-panel PNG/JPEG (unchanged) — now also captures the companion weekly table.
+- Workbook export gets two new sheets when PCms is present: `PCms Reasons`, `PCms Top Agents`.
 
 ## Technical notes
-- New deps: `html-to-image`, `jspdf` (both pure-JS, edge-safe; we only run them in the browser).
-- New module `src/lib/analyzer/export.ts` with `exportNodeToImage(node, fmt)`, `exportWorkbook(sections)`, `exportViewToPdf(node, title)`.
-- New component `src/components/ExportMenu.tsx` (shadcn `DropdownMenu`) attached to each chart card via a `ref`.
-- Weekly chart refactor lives in `src/routes/index.tsx` Trends section; reusable as `WeeklyTrendChart` component in `src/components/charts/WeeklyTrendChart.tsx`.
-- No backend changes; everything stays client-side and stateless.
+
+- New files: `src/lib/analyzer/parsePcms.ts`, `src/lib/analyzer/pcms.ts` (selectors), `src/routes/index.tsx` gains a `KSL5bDetail` section component (kept in same file to match current structure, or split into `src/components/sections/Ksl5bDetail.tsx` if it exceeds ~250 lines).
+- `Dataset` in `parse.ts` extended with `pcms` array + `pcmsLoaded: boolean`; existing computations untouched.
+- Weekly chart fix is purely presentational (`WeeklySection` in `src/routes/index.tsx`) — no changes to `compute.ts`.
+- No new runtime deps; reuses `xlsx`, `recharts`, `html-to-image` already in the project.
 
 ## Out of scope
-- Server-side rendering of exports, scheduled email reports, multi-page PDF with all KPIs (can follow up).
+
+- Persistence / server storage (still 100% client-side, GitHub Pages friendly).
+- Auth, sharing links, multi-user state.
