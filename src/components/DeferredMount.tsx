@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 // Global mount queue — serialises DeferredMount activations across the whole
-// component tree so they never all fire in the same frame.
+// component tree with a deliberate gap between each mount so the browser
+// always has time to process user input between frames.
 const queue: Array<() => void> = [];
 let draining = false;
 
@@ -13,19 +14,21 @@ function enqueue(activate: () => void) {
 function drain() {
   if (queue.length === 0) { draining = false; return; }
   draining = true;
-  // One mount per animation frame keeps every frame under ~16 ms.
-  requestAnimationFrame(() => {
+  // Wait 50 ms between each mount — gives the browser two full frames to
+  // handle input events (scroll, click, keydown) without being blocked.
+  setTimeout(() => {
     const next = queue.shift();
     if (next) next();
     drain();
-  });
+  }, 50);
 }
 
 /**
  * Renders `fallback` synchronously, then queues `children` to mount
- * one-per-frame via a global serialised RAF queue.
+ * one-at-a-time with a 50 ms gap between each activation.
  * This prevents the render avalanche that occurs when many panels mount
- * simultaneously after a dataset is loaded.
+ * simultaneously after a dataset is loaded, while keeping the UI interactive
+ * throughout the stagger sequence.
  */
 export function DeferredMount({
   children,
@@ -45,6 +48,11 @@ export function DeferredMount({
     enqueue(() => {
       setReady(true);
     });
+    // Flush any remaining queued items when this instance unmounts
+    // (e.g. tab switch before all panels have loaded).
+    return () => {
+      mounted.current = false;
+    };
   }, []);
 
   if (ready) return <>{children}</>;
