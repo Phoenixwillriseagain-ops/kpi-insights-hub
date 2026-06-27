@@ -482,6 +482,9 @@ function Analysis({
         <TabsContent value="excl" className="space-y-6">
           <ExclusionSection ds={ds} month={month} detected={detectedKpis} />
         </TabsContent>
+        <TabsContent value="quality" className="space-y-6">
+          <QualityReopenSection ds={ds} month={month} detected={detectedKpis} />
+        </TabsContent>
         {ds.pcms.length > 0 && (
           <TabsContent value="ksl5b" className="space-y-6">
             <Ksl5bDetail ds={ds} month={month} />
