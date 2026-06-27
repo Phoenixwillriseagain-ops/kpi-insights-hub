@@ -1045,7 +1045,7 @@ const QueuesSection = React.memo(function QueuesSection({
       </Panel>
     </>
   );
-}
+});
 
 /* ─────────────────────────────────────────────────── EXCLUSION IMPACT */
 
