@@ -526,10 +526,6 @@ function Analysis({
     [ds],
   );
   const [activeTab, setActiveTab] = useState<string>("overview");
-  const [visited, setVisited] = useState<Set<string>>(() => new Set(["overview"]));
-  useEffect(() => {
-    setVisited((prev) => (prev.has(activeTab) ? prev : new Set(prev).add(activeTab)));
-  }, [activeTab]);
 
 
   return (
