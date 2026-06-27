@@ -95,6 +95,7 @@ function Dashboard() {
         files.excl.filter((f) => f.wb).map((f) => ({ name: f.name, wb: f.wb })),
       );
       setReport(rep);
+      setExclMappings(buildExclMappings(files.excl.filter((f) => f.wb).map((f) => ({ name: f.name, wb: f.wb }))));
       if (!rep.ok && !override) {
         toast.error("Fix required columns before running", {
           description: "See the validation panel for details, or toggle “Run anyway” to bypass.",
