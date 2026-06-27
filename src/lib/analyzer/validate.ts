@@ -59,6 +59,9 @@ function suggest(headers: string[], required: Record<string, string[]>, label: s
   return candidate ? `Closest header: "${candidate}". Rename to "${syn[0]}".` : `Add a "${syn[0]}" column.`;
 }
 
+// Sheets that the KSL-4 & KM-1 analysis tab depends on.
+const QUALITY_SHEETS = ["KSL-4", "KM-1"] as const;
+
 export function validateSla(file: string, wb: XLSX.WorkBook): ValidationIssue[] {
   const out: ValidationIssue[] = [];
   const kpiSheets = wb.SheetNames.filter((n) => matchKpi(n));
@@ -70,24 +73,44 @@ export function validateSla(file: string, wb: XLSX.WorkBook): ValidationIssue[] 
     });
     return out;
   }
+  // Guard the KSL-4 / KM-1 tab: both sheets must be present *and* parseable.
+  const matchedCodes = new Set(kpiSheets.map((n) => matchKpi(n)));
+  QUALITY_SHEETS.forEach((code) => {
+    if (!matchedCodes.has(code)) {
+      out.push({
+        file, severity: "error",
+        message: `Missing sheet for ${code}.`,
+        hint: `The KSL-4 & KM-1 tab needs a sheet named "${code}" (or a close variant). Rename one of the sheets so it starts with "${code}".`,
+      });
+    }
+  });
   kpiSheets.forEach((name) => {
+    const code = matchKpi(name);
+    const isQuality = code === "KSL-4" || code === "KM-1";
     const headers = pickHeader(wb.Sheets[name]);
     if (headers.length === 0) {
-      out.push({ file, sheet: name, severity: "error", message: "Sheet looks empty or has no header row." });
+      out.push({
+        file, sheet: name,
+        severity: isQuality ? "error" : "warn",
+        message: "Sheet looks empty or has no header row.",
+        hint: isQuality ? `${code} powers the KSL-4 & KM-1 tab — add a header row with Ticket, DATE_CLOSE, Queue, Excluded, Breach columns.` : undefined,
+      });
       return;
     }
     const missing = findMissing(headers, SLA_REQUIRED);
     missing.forEach((m) => {
-      const sev: Severity = m === "Excluded" || m === "Ticket" || m === "Breach" ? "error" : "warn";
+      const required = m === "Excluded" || m === "Ticket" || m === "Breach";
+      const sev: Severity = isQuality || required ? "error" : "warn";
       out.push({
         file, sheet: name, severity: sev,
-        message: `Missing required column: ${m}.`,
+        message: `Missing required column: ${m}${isQuality ? ` (needed for ${code} analysis)` : ""}.`,
         hint: suggest(headers, SLA_REQUIRED, m),
       });
     });
   });
   return out;
 }
+
 
 export function validatePcms(file: string, wb: XLSX.WorkBook): ValidationIssue[] {
   const out: ValidationIssue[] = [];
