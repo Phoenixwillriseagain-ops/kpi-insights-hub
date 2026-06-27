@@ -1117,7 +1117,7 @@ function Panel({ title, subtitle, badge, exportName, children }: { title: string
         {badge && <Badge data-export-nowrap variant="secondary" className="ml-auto whitespace-nowrap text-[10px]">{badge}</Badge>}
         {exportName && <div className={cn(badge ? "" : "ml-auto")}><ExportMenu targetRef={ref} name={exportName} /></div>}
       </header>
-      <div className="p-4">{children}</div>
+      <div className="p-4"><DeferredMount>{children}</DeferredMount></div>
     </section>
   );
 }
