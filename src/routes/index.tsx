@@ -1105,6 +1105,19 @@ function withDeltas<T extends { rate: number }>(rows: T[]): (T & { prev: number 
 
 /* ─────────────────────────────────────────────────── KSL-4 & KM-1 FOCUS */
 
+function ExportableTile({ ds, code, month }: { ds: Dataset; code: KpiCode; month: string | null }) {
+  const ref = useRef<HTMLDivElement>(null);
+  return (
+    <div ref={ref} className="relative">
+      <div className="absolute right-2 top-2 z-10">
+        <ExportMenu targetRef={ref} name={`quality_tile_${code}`} />
+      </div>
+      <KpiTile ds={ds} code={code} month={month} />
+    </div>
+  );
+}
+
+
 function QualityReopenSection({ ds, month, detected }: { ds: Dataset; month: string | null; detected: KpiCode[] }) {
   const codes = (["KSL-4", "KM-1"] as KpiCode[]).filter((c) => detected.includes(c));
   if (codes.length === 0) {
@@ -1113,8 +1126,9 @@ function QualityReopenSection({ ds, month, detected }: { ds: Dataset; month: str
   return (
     <>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {codes.map((c) => <KpiTile key={c} ds={ds} code={c} month={month} />)}
+        {codes.map((c) => <ExportableTile key={c} ds={ds} code={c} month={month} />)}
       </div>
+
 
       {codes.map((code) => {
         const meta = KPI_META[code];
