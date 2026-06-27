@@ -731,7 +731,8 @@ const KpiTile = React.memo(function KpiTile({ ds, code, month }: { ds: Dataset; 
       </div>
     </div>
   );
-}
+});
+
 
 function RagBadge({ rag, isKM }: { rag: "green" | "amber" | "red" | "none"; isKM: boolean }) {
   if (rag === "none") return <Badge variant="secondary" className="text-[10px]">no data</Badge>;
