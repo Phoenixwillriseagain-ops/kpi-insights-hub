@@ -19,16 +19,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - name: Build
         env:
-          # Nitro will prerender all routes (they are all ssr:false) and emit static files
           NITRO_PRESET: static
+          # Serve assets from the repo subpath on GitHub Pages
+          VITE_BASE: /breaches-tracker/
         run: bun run build
       - name: Prepare static output
         run: |
-          # Nitro's static preset emits prerendered HTML to .output/public
           OUT=.output/public
           if [ ! -d "$OUT" ]; then
             echo "Expected $OUT — adjust this step to match your build output." && exit 1
