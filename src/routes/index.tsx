@@ -616,6 +616,31 @@ function TabTrigger({ value, icon: Icon, children }: { value: string; icon: type
   );
 }
 
+/**
+ * Keep-alive tab panel: once a tab is visited, force-mount it so its heavy
+ * chart subtree never unmounts when the user switches tabs. Radix hides
+ * inactive panels via the `hidden` attribute, so they cost nothing to render.
+ */
+function KeepAliveTab({
+  value,
+  visited,
+  className,
+  children,
+}: {
+  value: string;
+  visited: Set<string>;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  if (!visited.has(value)) return null;
+  return (
+    <TabsContent value={value} forceMount className={className}>
+      {children}
+    </TabsContent>
+  );
+}
+
+
 /* ─────────────────────────────────────────────────────── OVERVIEW */
 
 const OverviewSection = React.memo(function OverviewSection({ ds, month, detected }: { ds: Dataset; month: string | null; detected: KpiCode[] }) {
