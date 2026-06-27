@@ -101,7 +101,7 @@ function Dashboard() {
   return (
     <div className="min-h-screen">
       <Toaster richColors position="top-right" />
-      <Header onToggleTheme={toggleTheme} dark={dark} onReset={dataset ? reset : undefined} />
+      <Header onToggleTheme={toggleTheme} dark={dark} onReset={dataset ? reset : undefined} onExport={dataset ? () => exportDatasetWorkbook(dataset, activeMonth) : undefined} />
 
       {!dataset ? (
         <UploadHero
@@ -131,7 +131,7 @@ function Dashboard() {
 
 /* ────────────────────────────────────────────────────────────── HEADER */
 
-function Header({ onToggleTheme, dark, onReset }: { onToggleTheme: () => void; dark: boolean; onReset?: () => void }) {
+function Header({ onToggleTheme, dark, onReset, onExport }: { onToggleTheme: () => void; dark: boolean; onReset?: () => void; onExport?: () => void }) {
   return (
     <header className="sticky top-0 z-40 glass border-b border-border/50">
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-6 py-3">
@@ -143,6 +143,11 @@ function Header({ onToggleTheme, dark, onReset }: { onToggleTheme: () => void; d
           <span className="text-[10px] uppercase tracking-widest text-muted-foreground">KPI & Breaches Analyzer</span>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          {onExport && (
+            <Button variant="outline" size="sm" onClick={onExport} className="gap-1.5">
+              <Download className="h-3.5 w-3.5" /> Export report
+            </Button>
+          )}
           {onReset && (
             <Button variant="ghost" size="sm" onClick={onReset} className="gap-1.5">
               <RefreshCw className="h-3.5 w-3.5" /> New analysis
