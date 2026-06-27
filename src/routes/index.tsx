@@ -24,7 +24,7 @@ import {
 } from "@/lib/analyzer/parse";
 import {
   exclusionImpact, monthLabel, monthlySummary, overallByKpi, queueBreakdown,
-  rawOverallByKpi, weekLabel, weeklySummary,
+  rawOverallByKpi, weekLabel, weeklySummary, weeklyQueueSummary,
 } from "@/lib/analyzer/compute";
 import { exportDatasetWorkbook } from "@/lib/analyzer/export";
 import { ExportMenu } from "@/components/ExportMenu";
