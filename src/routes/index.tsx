@@ -192,9 +192,9 @@ function UploadHero({
           See the <span className="gradient-text">pulse</span> of every SLA
         </h1>
         <p className="mx-auto mt-4 max-w-2xl text-sm text-muted-foreground sm:text-base">
-          Drop your SLA exports, optional enriched breaches and an exclusions list.
-          Get KPI compliance, monthly &amp; weekly trends, queue drill-down and a side-by-side
-          before/after exclusion view — instantly.
+          Drop the SLA overall workbook, an optional PCms KSL-5b deep-dive and an exclusions register.
+          Get KPI compliance, monthly &amp; weekly trends, queue drill-down, exclusion crosscheck
+          and a dedicated KSL-5b reason analysis — instantly.
         </p>
       </section>
 
