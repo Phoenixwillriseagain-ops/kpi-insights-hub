@@ -64,7 +64,8 @@ export function overallByKpi(ds: Dataset, code: KpiCode, month?: string | null) 
 }
 
 export function rawOverallByKpi(ds: Dataset, code: KpiCode, month?: string | null) {
-  const rows = (ds.sla[code] ?? []).filter((r) => !r.isExcluded);
+  // "Before exclusion" — every row in the SLA sheet, including isExcluded=1.
+  const rows = ds.sla[code] ?? [];
   const scoped = month ? rows.filter((r) => r.month === month) : rows;
   const total = scoped.length;
   const breaches = scoped.filter((r) => r.isBreach).length;
@@ -86,12 +87,33 @@ export function queueBreakdown(ds: Dataset, code: KpiCode, month?: string | null
   }).sort((a, b) => b.total - a.total);
 }
 
+// Weekly summary for a single queue. raw=true keeps isExcluded rows in the denominator.
+export function weeklyQueueSummary(ds: Dataset, code: KpiCode, queue: string, opts?: { lastN?: number; raw?: boolean }): PeriodPoint[] {
+  const meta = KPI_META[code];
+  const ex = exclSet(ds, code);
+  let rows = (ds.sla[code] ?? []).filter((r) => r.week && r.week !== "No week" && r.queue === queue);
+  if (!opts?.raw) {
+    rows = rows.filter((r) => !r.isExcluded && !(ex.size && ex.has(r.ticket.trim().toLowerCase())));
+  }
+  const grouped: Record<string, SlaRow[]> = {};
+  rows.forEach((r) => { (grouped[r.week] ??= []).push(r); });
+  const weeks = Object.keys(grouped).sort().slice(-(opts?.lastN ?? WEEKLY_WINDOW));
+  return weeks.map((w) => {
+    const arr = grouped[w];
+    const total = arr.length;
+    const breaches = arr.filter((r) => r.isBreach).length;
+    const t = calcTarget(total, breaches, meta);
+    return { label: w, total, breaches, rate: t.value, rag: t.rag };
+  });
+}
+
 export function exclusionImpact(ds: Dataset, code: KpiCode, month?: string | null) {
   const meta = KPI_META[code];
-  const allRows = (ds.sla[code] ?? []).filter((r) => !r.isExcluded);
+  // raw = every row, including those with isExcluded=1
+  const allRows = ds.sla[code] ?? [];
   const scoped = month ? allRows.filter((r) => r.month === month) : allRows;
   const ex = exclSet(ds, code);
-  const adjusted = scoped.filter((r) => !ex.has(r.ticket.trim().toLowerCase()));
+  const adjusted = scoped.filter((r) => !r.isExcluded && !ex.has(r.ticket.trim().toLowerCase()));
   const rawTotal = scoped.length;
   const rawBreaches = scoped.filter((r) => r.isBreach).length;
   const adjTotal = adjusted.length;
