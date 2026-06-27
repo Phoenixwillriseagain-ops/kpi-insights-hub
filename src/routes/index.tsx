@@ -117,7 +117,7 @@ function Dashboard() {
     } finally { setBusy(false); }
   };
 
-  const reset = () => { setDataset(null); setFiles({ sla: [], breach: [], excl: [] }); setReport(null); setOverride(false); };
+  const reset = () => { setDataset(null); setFiles({ sla: [], breach: [], excl: [] }); setReport(null); setOverride(false); setExclMappings([]); };
 
   return (
     <div className="min-h-screen">
