@@ -45,7 +45,7 @@ export const Route = createFileRoute("/")({
 
 type Slot = "sla" | "breach" | "excl";
 
-type LoadedFile = { name: string; wb?: import("xlsx").WorkBook; error?: string };
+type LoadedFile = { name: string; file?: File; error?: string };
 
 function Dashboard() {
   const [files, setFiles] = useState<Record<Slot, LoadedFile[]>>({ sla: [], breach: [], excl: [] });
@@ -68,12 +68,7 @@ function Dashboard() {
 
   const addFiles = useCallback(async (slot: Slot, list: FileList | File[]) => {
     const arr = Array.from(list);
-    const loaded: LoadedFile[] = await Promise.all(
-      arr.map(async (f) => {
-        try { return { name: f.name, wb: await readWorkbook(f) }; }
-        catch (e) { return { name: f.name, error: e instanceof Error ? e.message : "Failed to read" }; }
-      }),
-    );
+    const loaded: LoadedFile[] = arr.map((f) => ({ name: f.name, file: f }));
     setFiles((s) => ({ ...s, [slot]: [...s[slot], ...loaded] }));
     setReport(null); setOverride(false); setExclMappings([]);
   }, []);
@@ -83,40 +78,43 @@ function Dashboard() {
     setReport(null); setOverride(false); setExclMappings([]);
   };
 
-  const canRun = files.sla.some((f) => !f.error);
+  const canRun = files.sla.some((f) => !f.error && f.file);
 
   const runAnalysis = async () => {
     setBusy(true);
-    // let the spinner paint before we burn the main thread
-    const yieldToBrowser = () => new Promise<void>((r) =>
-      requestAnimationFrame(() => setTimeout(r, 0)),
-    );
     try {
-      await yieldToBrowser();
-      const rep = buildReport(
-        files.sla.filter((f) => f.wb).map((f) => ({ name: f.name, wb: f.wb })),
-        files.breach.filter((f) => f.wb).map((f) => ({ name: f.name, wb: f.wb })),
-        files.excl.filter((f) => f.wb).map((f) => ({ name: f.name, wb: f.wb })),
-      );
-      setReport(rep);
-      setExclMappings(buildExclMappings(files.excl.filter((f) => f.wb).map((f) => ({ name: f.name, wb: f.wb }))));
-      if (!rep.ok && !override) {
+      const toBufs = async (items: LoadedFile[]) =>
+        Promise.all(
+          items.filter((f) => f.file).map(async (f) => ({ name: f.name, buf: await f.file!.arrayBuffer() })),
+        );
+      const [sla, breach, excl] = await Promise.all([
+        toBufs(files.sla), toBufs(files.breach), toBufs(files.excl),
+      ]);
+
+      const worker = new Worker(new URL("../lib/analyzer/worker.ts", import.meta.url), { type: "module" });
+      const result = await new Promise<WorkerOutput>((resolve, reject) => {
+        worker.onmessage = (e: MessageEvent<WorkerOutput>) => resolve(e.data);
+        worker.onerror = (e) => reject(new Error(e.message || "Worker error"));
+        const payload: WorkerInput = { sla, breach, excl };
+        const transfer = [...sla, ...breach, ...excl].map((x) => x.buf);
+        worker.postMessage(payload, transfer);
+      });
+      worker.terminate();
+
+      if (!result.ok) throw new Error(result.error);
+      setReport(result.report);
+      setExclMappings(result.exclMappings);
+      if (!result.report.ok && !override) {
         toast.error("Fix required columns before running", {
           description: "See the validation panel for details, or toggle \u201CRun anyway\u201D to bypass.",
         });
         return;
       }
-      await yieldToBrowser();
-      const ds = buildDataset(
-        files.sla.filter((f) => f.wb).map((f) => f.wb!),
-        files.breach.filter((f) => f.wb).map((f) => f.wb!),
-        files.excl.filter((f) => f.wb).map((f) => f.wb!),
-      );
+      const ds = result.ds;
       if (!Object.keys(ds.sla).length) {
         toast.error("No KPI sheets detected", { description: "Sheet names should match KSL-1, KSL-2a, …, KM-1, KM-2." });
         return;
       }
-      await yieldToBrowser();
       setDataset(ds);
       setActiveMonth(null);
       toast.success("Analysis ready", { description: `${ds.months.length} months · ${ds.weeks.length} weeks · ${Object.keys(ds.sla).length} KPIs` });
