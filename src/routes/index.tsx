@@ -3,10 +3,10 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Activity, ArrowDown, ArrowUp, BarChart3, ChevronRight, Download, FileSpreadsheet,
   Filter, Layers, LineChart as LineChartIcon, Loader2, Moon, Pin, RefreshCw,
-  Sparkles, Sun, Target, TrendingUp, Upload, X,
+  Sparkles, Sun, Target, TrendingUp, Upload, Users, X,
 } from "lucide-react";
 import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart,
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ComposedChart, LabelList, Legend, Line, LineChart,
   ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 
