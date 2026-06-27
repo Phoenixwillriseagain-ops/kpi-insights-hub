@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity, AlertTriangle, ArrowDown, ArrowUp, BarChart3, CheckCircle2, ChevronRight, Download, FileSpreadsheet,
   Filter, Info, Layers, LineChart as LineChartIcon, Loader2, Moon, Pin, RefreshCw,
@@ -525,6 +525,12 @@ function Analysis({
     () => KPI_ORDER.filter((c) => ds.sla[c]?.length),
     [ds],
   );
+  const [activeTab, setActiveTab] = useState<string>("overview");
+  const [visited, setVisited] = useState<Set<string>>(() => new Set(["overview"]));
+  useEffect(() => {
+    setVisited((prev) => (prev.has(activeTab) ? prev : new Set(prev).add(activeTab)));
+  }, [activeTab]);
+
 
   return (
     <main className="mx-auto max-w-7xl px-6 py-8">
@@ -541,7 +547,7 @@ function Analysis({
         ))}
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="glass h-12 w-full justify-start gap-1 rounded-2xl p-1.5">
           <TabTrigger value="overview" icon={BarChart3}>Overview</TabTrigger>
           <TabTrigger value="monthly" icon={LineChartIcon}>Monthly Trend</TabTrigger>
@@ -552,30 +558,31 @@ function Analysis({
           {ds.pcms.length > 0 && <TabTrigger value="ksl5b" icon={Users}>KSL-5b Detail</TabTrigger>}
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-6">
+        <KeepAliveTab value="overview" visited={visited} className="space-y-6">
           <OverviewSection ds={ds} month={month} detected={detectedKpis} />
-        </TabsContent>
-        <TabsContent value="monthly" className="space-y-6">
+        </KeepAliveTab>
+        <KeepAliveTab value="monthly" visited={visited} className="space-y-6">
           <MonthlySection ds={ds} detected={detectedKpis} />
-        </TabsContent>
-        <TabsContent value="weekly" className="space-y-6">
+        </KeepAliveTab>
+        <KeepAliveTab value="weekly" visited={visited} className="space-y-6">
           <WeeklySection ds={ds} detected={detectedKpis} />
-        </TabsContent>
-        <TabsContent value="queues" className="space-y-6">
+        </KeepAliveTab>
+        <KeepAliveTab value="queues" visited={visited} className="space-y-6">
           <QueuesSection ds={ds} month={month} detected={detectedKpis} activeKpi={activeKpi} setActiveKpi={setActiveKpi} />
-        </TabsContent>
-        <TabsContent value="excl" className="space-y-6">
+        </KeepAliveTab>
+        <KeepAliveTab value="excl" visited={visited} className="space-y-6">
           <ExclusionSection ds={ds} month={month} detected={detectedKpis} />
-        </TabsContent>
-        <TabsContent value="quality" className="space-y-6">
+        </KeepAliveTab>
+        <KeepAliveTab value="quality" visited={visited} className="space-y-6">
           <QualityReopenSection ds={ds} month={month} detected={detectedKpis} />
-        </TabsContent>
+        </KeepAliveTab>
         {ds.pcms.length > 0 && (
-          <TabsContent value="ksl5b" className="space-y-6">
+          <KeepAliveTab value="ksl5b" visited={visited} className="space-y-6">
             <Ksl5bDetail ds={ds} month={month} />
-          </TabsContent>
+          </KeepAliveTab>
         )}
       </Tabs>
+
     </main>
   );
 }
@@ -608,6 +615,31 @@ function TabTrigger({ value, icon: Icon, children }: { value: string; icon: type
     </TabsTrigger>
   );
 }
+
+/**
+ * Keep-alive tab panel: once a tab is visited, force-mount it so its heavy
+ * chart subtree never unmounts when the user switches tabs. Radix hides
+ * inactive panels via the `hidden` attribute, so they cost nothing to render.
+ */
+function KeepAliveTab({
+  value,
+  visited,
+  className,
+  children,
+}: {
+  value: string;
+  visited: Set<string>;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  if (!visited.has(value)) return null;
+  return (
+    <TabsContent value={value} forceMount className={className}>
+      {children}
+    </TabsContent>
+  );
+}
+
 
 /* ─────────────────────────────────────────────────────── OVERVIEW */
 
