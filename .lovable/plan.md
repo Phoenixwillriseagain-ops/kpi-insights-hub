@@ -1,32 +1,48 @@
-## Diagnosis
+## Goal
 
-The freeze only on GitHub Pages (production build) after 2–3 clicks is caused by the `KeepAliveTab` pattern we added last turn:
+Stop the main-thread freeze that happens on the GitHub Pages build after 2–3 clicks. Locally it works because Vite dev serves modules lazily; the production SPA ships one ~1MB `routes` chunk that runs all parsing + Recharts on the UI thread.
 
-- Each visited tab is `forceMount`-ed and Radix simply sets `hidden` on inactive panels.
-- Every `ResponsiveContainer` inside those hidden panels still mounts a `ResizeObserver`. In a hidden subtree it measures `0×0`, and Recharts re-runs layout on each resize callback.
-- After 2–3 tab visits there are 10–20 of these observers all firing on every layout pass. In dev/preview React's slower path and StrictMode double-render mask it; the minified prod build on Pages tightens the loop into a freeze with no console error (Chrome silently swallows `ResizeObserver loop completed with undelivered notifications`).
+## Changes
 
-Local + Lovable preview "work" because they run the dev build with HMR overlay and StrictMode, which throttle the loop. The Pages bundle is the same code; the runtime characteristics differ.
+### 1. Web Worker for parsing & aggregation (primary fix)
 
-## Fix
+Create `src/lib/analyzer/worker.ts`:
+- Receives raw `ArrayBuffer`s for SLA / Breach / Exclusion files (transferable, zero-copy).
+- Inside the worker: `XLSX.read` each buffer, then run `buildReport`, `buildExclMappings`, `buildDataset`.
+- Posts back `{ ok, report, exclMappings, ds }` (Dataset is plain data — already serializable).
 
-Drop keep-alive entirely and instead make tab switches cheap by deferring heavy work, not by hoarding mounted charts.
+Update `runAnalysis` in `src/routes/index.tsx`:
+- Read each uploaded `File` to `ArrayBuffer`.
+- Instantiate the worker via `new Worker(new URL("../lib/analyzer/worker.ts", import.meta.url), { type: "module" })` so Vite emits it as a separate chunk.
+- Await the response, then `setState`. Remove the `yieldToBrowser` shuffle.
+- Terminate the worker after each run.
 
-1. **`src/routes/index.tsx`**
-   - Remove `KeepAliveTab` and the `visited` `Set` state. Replace each `<KeepAliveTab …>` with a plain `<TabsContent value="…">`.
-   - Wrap each tab section's body in `<DeferredMount>` so the chart subtree mounts one animation frame after the tab header paints (we already have this component). This keeps the `mousedown`/tab-switch handler under the 50ms budget.
-   - Keep the per-section `React.memo` and the `dsCache` in `compute.ts` — re-mounting is now O(layout) only, since aggregation is cached.
+Result: `xlsx` parsing + dataset/report construction never touch the UI thread.
 
-2. **`src/components/DeferredMount.tsx`** — no change needed; already renders a skeleton then swaps in children on next frame.
+### 2. Code-split heavy libraries
 
-3. **No business-logic changes.** Aggregation, parsing, KPI math, exports all untouched.
+Update `vite.config.pages.ts` `build.rollupOptions.output.manualChunks` to break out:
+- `recharts`
+- `xlsx` (only loaded by the worker → drops it from the main bundle entirely)
+- `@radix-ui/*` group
+- `html-to-image` (export-only)
 
-## Verification
+Raise `chunkSizeWarningLimit` to 1500.
 
-- Build with `bunx vite build --config vite.config.pages.ts` and serve `dist/` locally with `npx serve` under the `/kpi-insights-hub/` base.
-- Drive Playwright headless, upload one SLA workbook, then click Overview → Monthly → Weekly → Queues → Quality → Overview → Monthly six more times. Record `performance.now()` around each click and confirm INP stays < 200ms and the page remains interactive (button click after the loop succeeds within 100ms).
-- Watch `chrome://tracing`-style violations in the script's console capture; expect no further `setTimeout 80ms+` or `mousedown 200ms+` warnings after the first chart mount.
+### 3. Lazy-load tab sections
 
-## Why this is the right call
+Split each panel component out of the 1613-line `src/routes/index.tsx` into its own file under `src/components/sections/` (Monthly, Weekly, Queues, Pcms, QualityReopens, Overview). Load them with `React.lazy` + `<Suspense fallback={…}>` so a tab's chart code is only parsed when that tab is first opened. This is the main reason a fresh Pages session locks after a few clicks — every section's Recharts subtree is in the initial chunk.
 
-Keep-alive trades remount cost for permanent observer cost. With our cache in `compute.ts`, remount is cheap; the observer leak is what actually breaks the page. Removing it eliminates the freeze without bringing back the original "click feels heavy" symptom, because `DeferredMount` already spreads the remount across a frame.
+Keep `DeferredMount` (it already defers the chart mount by one frame and is fine).
+
+### 4. Verification
+
+- `bunx vite build --config vite.config.pages.ts` and confirm:
+  - Multiple chunks emitted (`xlsx-*.js`, `recharts-*.js`, per-section chunks).
+  - Main `routes` chunk well under 500KB.
+- Playwright run against the built `dist/` served statically: upload SLA file, click Overview/Monthly/Weekly/Queues repeatedly, assert no long task > 200ms and no freeze.
+
+## Out of scope
+
+- No change to KPI logic, RAG thresholds, validation rules, or visuals.
+- No change to deploy workflow other than what `vite.config.pages.ts` already does.
