@@ -305,16 +305,21 @@ function UploadCard({ slot, files, onAdd, onRemove }: {
       </div>
 
       {files.length > 0 && (
-        <ul className="mt-3 space-y-1.5">
+        <ul className="mt-3 space-y-1.5" aria-label={`Uploaded ${meta.title} files`}>
           {files.map((f, i) => (
             <li key={i} className={cn(
               "flex items-center gap-2 rounded-lg border border-border/60 bg-background/40 px-2.5 py-1.5 text-xs",
               f.error && "border-destructive/40 bg-destructive/5",
             )}>
-              <span className={cn("font-semibold", f.error ? "text-destructive" : "text-[color:var(--success)]")}>{f.error ? "!" : "✓"}</span>
+              <span aria-hidden="true" className={cn("font-semibold", f.error ? "text-destructive" : "text-[color:var(--success)]")}>{f.error ? "!" : "✓"}</span>
+              <span className="sr-only">{f.error ? `Error: ${f.error}` : "Loaded"}</span>
               <span className="flex-1 truncate" title={f.name}>{f.name}</span>
-              <button onClick={() => onRemove(i)} aria-label="Remove" className="text-muted-foreground hover:text-destructive">
-                <X className="h-3.5 w-3.5" />
+              <button
+                onClick={() => onRemove(i)}
+                aria-label={`Remove ${f.name}`}
+                className="rounded text-muted-foreground transition hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             </li>
           ))}
