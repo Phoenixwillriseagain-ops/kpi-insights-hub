@@ -276,6 +276,69 @@ function Tip({ icon: Icon, label, body }: { icon: typeof Target; label: string; 
   );
 }
 
+function ValidationPanel({ report, override, setOverride }: { report: ValidationReport; override: boolean; setOverride: (v: boolean) => void }) {
+  const errors = report.issues.filter((i) => i.severity === "error");
+  const warns = report.issues.filter((i) => i.severity === "warn");
+  const infos = report.issues.filter((i) => i.severity === "info");
+  if (report.ok && warns.length === 0) {
+    return (
+      <div className="mt-8 glass flex items-center gap-3 rounded-2xl border border-[color:var(--success)]/30 bg-[color:var(--success)]/5 px-4 py-3 text-sm">
+        <CheckCircle2 className="h-4 w-4 text-[color:var(--success)]" />
+        <span className="font-semibold text-[color:var(--success)]">Looks good</span>
+        <span className="text-muted-foreground">All required columns detected.</span>
+      </div>
+    );
+  }
+  const tone = errors.length
+    ? "border-[color:var(--danger)]/40 bg-[color:var(--danger)]/5"
+    : "border-[color:var(--warning)]/40 bg-[color:var(--warning)]/5";
+  return (
+    <section className={cn("mt-8 glass rounded-2xl border", tone)} aria-label="Upload validation">
+      <header className="flex items-center gap-2 border-b border-border/40 px-4 py-3">
+        {errors.length
+          ? <AlertTriangle className="h-4 w-4 text-[color:var(--danger)]" />
+          : <Info className="h-4 w-4 text-[color:var(--warning)]" />}
+        <h3 className="text-sm font-bold">
+          Validation · {errors.length} error{errors.length === 1 ? "" : "s"} · {warns.length} warning{warns.length === 1 ? "" : "s"}
+        </h3>
+        {errors.length > 0 && (
+          <label className="ml-auto inline-flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={override}
+              onChange={(e) => setOverride(e.target.checked)}
+              className="h-3.5 w-3.5 accent-[color:var(--primary)]"
+            />
+            Run anyway
+          </label>
+        )}
+      </header>
+      <ul className="max-h-72 divide-y divide-border/40 overflow-y-auto">
+        {[...errors, ...warns, ...infos].map((iss, i) => (
+          <IssueRow key={i} issue={iss} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function IssueRow({ issue }: { issue: ValidationIssue }) {
+  const color = issue.severity === "error" ? "var(--danger)" : issue.severity === "warn" ? "var(--warning)" : "var(--primary)";
+  return (
+    <li className="flex items-start gap-3 px-4 py-2.5 text-xs">
+      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: color }} />
+      <div className="min-w-0 flex-1">
+        <p className="truncate">
+          <span className="font-semibold text-foreground">{issue.file}</span>
+          {issue.sheet && <span className="text-muted-foreground"> · sheet “{issue.sheet}”</span>}
+        </p>
+        <p style={{ color }}>{issue.message}</p>
+        {issue.hint && <p className="text-muted-foreground">{issue.hint}</p>}
+      </div>
+    </li>
+  );
+}
+
 function UploadCard({ slot, files, onAdd, onRemove }: {
   slot: Slot;
   files: LoadedFile[];
