@@ -482,11 +482,12 @@ function StatBlock({ label, value, sub, icon: Icon, accent }: {
 
 function KpiTile({ ds, code, month }: { ds: Dataset; code: KpiCode; month: string | null }) {
   const meta = KPI_META[code];
-  const o = overallByKpi(ds, code, month);
-  const raw = rawOverallByKpi(ds, code, month);
+  const after = overallByKpi(ds, code, month);       // isExcluded=0 only
+  const before = rawOverallByKpi(ds, code, month);   // everything (incl. isExcluded=1)
   const trend = useMemo(() => weeklySummary(ds, code, { lastN: 6 }), [ds, code]);
-  const delta = o.rate - raw.rate;
-  const showDelta = Math.abs(delta) > 0.05 && raw.total !== o.total;
+  const delta = after.rate - before.rate;
+  const excludedCount = before.total - after.total;
+  const colorFor = (rag: string) => rag === "green" ? "var(--success)" : rag === "amber" ? "var(--warning)" : rag === "red" ? "var(--danger)" : undefined;
 
   return (
     <div className="glass group relative flex flex-col gap-3 overflow-hidden rounded-2xl p-5 transition hover:translate-y-[-2px] hover:ring-glow">
@@ -496,20 +497,33 @@ function KpiTile({ ds, code, month }: { ds: Dataset; code: KpiCode; month: strin
           <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: meta.color }}>{code}</p>
           <p className="mt-0.5 text-xs font-semibold leading-tight text-foreground">{meta.what}</p>
         </div>
-        <RagBadge rag={o.rag} isKM={meta.isKM} />
+        <RagBadge rag={after.rag} isKM={meta.isKM} />
       </div>
-      <div className="flex items-end justify-between gap-2">
+
+      <div className="grid grid-cols-2 gap-2 rounded-xl bg-secondary/40 p-2.5">
         <div>
-          <p className="font-display text-3xl font-bold tabular-nums" style={{ color: o.rag === "none" ? undefined : `var(--${o.rag === "green" ? "success" : o.rag === "amber" ? "warning" : "danger"})` }}>
-            {o.display}
-          </p>
-          <p className="text-[10px] text-muted-foreground">Target {meta.targetLabel}</p>
-          {showDelta && (
-            <p className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-              raw <span className="line-through">{raw.display}</span>
+          <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Before excl.</p>
+          <p className="font-display text-xl font-bold tabular-nums" style={{ color: colorFor(before.rag) }}>{before.display}</p>
+          <p className="text-[10px] text-muted-foreground">{before.total.toLocaleString()} tickets</p>
+        </div>
+        <div className="border-l border-border/60 pl-2">
+          <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">After excl.</p>
+          <p className="font-display text-xl font-bold tabular-nums" style={{ color: colorFor(after.rag) }}>{after.display}</p>
+          <p className="text-[10px] text-muted-foreground">{after.total.toLocaleString()} tickets</p>
+        </div>
+      </div>
+
+      <div className="flex items-end justify-between gap-2">
+        <div className="text-[10px] text-muted-foreground">
+          <p>Target {meta.targetLabel}</p>
+          {excludedCount > 0 && (
+            <p className="inline-flex items-center gap-1">
+              {excludedCount.toLocaleString()} excluded ·
               {delta > 0
                 ? <ArrowUp className="h-3 w-3 text-[color:var(--success)]" />
-                : <ArrowDown className="h-3 w-3 text-[color:var(--danger)]" />}
+                : delta < 0
+                ? <ArrowDown className="h-3 w-3 text-[color:var(--danger)]" />
+                : null}
               <span>{Math.abs(delta).toFixed(1)}pp</span>
             </p>
           )}
@@ -531,8 +545,8 @@ function KpiTile({ ds, code, month }: { ds: Dataset; code: KpiCode; month: strin
         </div>
       </div>
       <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-        <span>{o.total.toLocaleString()} tickets</span>
-        <span>{o.breaches.toLocaleString()} breaches</span>
+        <span>{after.breaches.toLocaleString()} breaches (after)</span>
+        <span>{before.breaches.toLocaleString()} (before)</span>
       </div>
     </div>
   );
