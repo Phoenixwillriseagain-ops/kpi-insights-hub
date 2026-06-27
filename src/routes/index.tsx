@@ -525,6 +525,12 @@ function Analysis({
     () => KPI_ORDER.filter((c) => ds.sla[c]?.length),
     [ds],
   );
+  const [activeTab, setActiveTab] = useState<string>("overview");
+  const [visited, setVisited] = useState<Set<string>>(() => new Set(["overview"]));
+  useEffect(() => {
+    setVisited((prev) => (prev.has(activeTab) ? prev : new Set(prev).add(activeTab)));
+  }, [activeTab]);
+
 
   return (
     <main className="mx-auto max-w-7xl px-6 py-8">
