@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   Activity, AlertTriangle, ArrowDown, ArrowUp, BarChart3, CheckCircle2, ChevronRight, Download, FileSpreadsheet,
   Filter, Info, Layers, LineChart as LineChartIcon, Loader2, Moon, Pin, RefreshCw,
@@ -87,8 +87,12 @@ function Dashboard() {
 
   const runAnalysis = async () => {
     setBusy(true);
+    // let the spinner paint before we burn the main thread
+    const yieldToBrowser = () => new Promise<void>((r) =>
+      requestAnimationFrame(() => setTimeout(r, 0)),
+    );
     try {
-      await new Promise((r) => setTimeout(r, 50));
+      await yieldToBrowser();
       const rep = buildReport(
         files.sla.filter((f) => f.wb).map((f) => ({ name: f.name, wb: f.wb })),
         files.breach.filter((f) => f.wb).map((f) => ({ name: f.name, wb: f.wb })),
@@ -98,10 +102,11 @@ function Dashboard() {
       setExclMappings(buildExclMappings(files.excl.filter((f) => f.wb).map((f) => ({ name: f.name, wb: f.wb }))));
       if (!rep.ok && !override) {
         toast.error("Fix required columns before running", {
-          description: "See the validation panel for details, or toggle “Run anyway” to bypass.",
+          description: "See the validation panel for details, or toggle \u201CRun anyway\u201D to bypass.",
         });
         return;
       }
+      await yieldToBrowser();
       const ds = buildDataset(
         files.sla.filter((f) => f.wb).map((f) => f.wb!),
         files.breach.filter((f) => f.wb).map((f) => f.wb!),
@@ -111,11 +116,15 @@ function Dashboard() {
         toast.error("No KPI sheets detected", { description: "Sheet names should match KSL-1, KSL-2a, …, KM-1, KM-2." });
         return;
       }
+      await yieldToBrowser();
       setDataset(ds);
       setActiveMonth(null);
       toast.success("Analysis ready", { description: `${ds.months.length} months · ${ds.weeks.length} weeks · ${Object.keys(ds.sla).length} KPIs` });
+    } catch (e) {
+      toast.error("Analysis failed", { description: e instanceof Error ? e.message : String(e) });
     } finally { setBusy(false); }
   };
+
 
   const reset = () => { setDataset(null); setFiles({ sla: [], breach: [], excl: [] }); setReport(null); setOverride(false); setExclMappings([]); };
 
@@ -654,14 +663,21 @@ function StatBlock({ label, value, sub, icon: Icon, accent }: {
   );
 }
 
-function KpiTile({ ds, code, month }: { ds: Dataset; code: KpiCode; month: string | null }) {
+const KpiTile = React.memo(function KpiTile({ ds, code, month }: { ds: Dataset; code: KpiCode; month: string | null }) {
   const meta = KPI_META[code];
-  const after = overallByKpi(ds, code, month);       // isExcluded=0 only
-  const before = rawOverallByKpi(ds, code, month);   // everything (incl. isExcluded=1)
-  const trend = useMemo(() => weeklySummary(ds, code, { lastN: 6 }), [ds, code]);
-  const delta = after.rate - before.rate;
-  const excludedCount = before.total - after.total;
+  const { after, before, trend, delta, excludedCount } = useMemo(() => {
+    const a = overallByKpi(ds, code, month);
+    const b = rawOverallByKpi(ds, code, month);
+    return {
+      after: a,
+      before: b,
+      trend: weeklySummary(ds, code, { lastN: 6 }),
+      delta: a.rate - b.rate,
+      excludedCount: b.total - a.total,
+    };
+  }, [ds, code, month]);
   const colorFor = (rag: string) => rag === "green" ? "var(--success)" : rag === "amber" ? "var(--warning)" : rag === "red" ? "var(--danger)" : undefined;
+
 
   return (
     <div className="glass group relative flex flex-col gap-3 overflow-hidden rounded-2xl p-5 transition hover:translate-y-[-2px] hover:ring-glow">
@@ -724,7 +740,8 @@ function KpiTile({ ds, code, month }: { ds: Dataset; code: KpiCode; month: strin
       </div>
     </div>
   );
-}
+});
+
 
 function RagBadge({ rag, isKM }: { rag: "green" | "amber" | "red" | "none"; isKM: boolean }) {
   if (rag === "none") return <Badge variant="secondary" className="text-[10px]">no data</Badge>;
