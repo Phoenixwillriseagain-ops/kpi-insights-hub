@@ -1,73 +1,41 @@
-# Plan — adapt dashboard to the real V2 workbook
+# Dashboard Upgrade Plan
 
-The previously-built scaffolding (routes, KPI cards, charts, GitHub Pages workflow) stays. The parser, aggregation, exclusion model and UI surfaces that depend on them get rewritten to match the actual file format you uploaded.
+## 1. Weekly Trend → Line Chart with labels
+- Replace the current weekly Bar chart with a Recharts `LineChart`.
+- X axis: week label (e.g. `W23 '26`) using existing `weekLabel()` helper.
+- Y axis: KPI % (hidden ticks, since labels live on points).
+- Add a `<LabelList>` on the line showing the percentage value above each point (e.g. `96.4%`), color-matched to RAG status per dot.
+- Keep target reference line (dashed) and RAG-colored dots.
+- Tooltip keeps total / breaches / rate breakdown.
 
-## File model (confirmed)
+## 2. Export functionality
+Two export surfaces:
 
-- One sheet per KPI: `KM-1, KM-2, KSL-1, KSL-2a, KSL-2b, KSL-2c, KSL-2d, KSL-3a, KSL-4, KSL-5a, KSL-5b, KSL-6`.
-- Each sheet row = one ticket evaluated for that KPI. Columns used:
-  `Incident Ticket, DATE_CLOSE, Queue, ISO_Language, SLA_Code, Breach_Description, Excluded, Week`.
-- A row is a **breach** when `Breach_Description` is non-empty; otherwise it counted toward applicable but did not breach.
-- `Excluded` is per-row (`'0'` / `'1'`).
-- ISO week is derived from `DATE_CLOSE`.
+**A. Chart image export (PNG / JPEG)**
+- Add a small "Export" menu (dropdown) on every chart card (Overview sparkline area, Trends line & monthly bar, Queue chart, Exclusion Impact chart).
+- Use `html-to-image` (lightweight, no canvas server deps) to render the chart container to PNG or JPEG.
+- File name pattern: `pulse_<view>_<kpi>_<yyyymmdd>.png`.
 
-## KPI formulas
+**B. Report export**
+- Top-bar "Export report" button with two options:
+  - **CSV** — current view's underlying data (overall by KPI, weekly series, queue breakdown, exclusion impact) zipped into one `.csv` per section via a single multi-sheet `.xlsx` produced with the already-installed `xlsx` lib.
+  - **PDF snapshot** — capture the active view's main container with `html-to-image` → embed into a single-page PDF using `jspdf` (auto-scaled to A4 landscape).
+- Respects current month filter and selected KPI.
 
-- KSL family: `SLA% = (total − breaches) / total`
-- KM family:  `KPI% = breaches / total`
-- Targets/thresholds keep the existing `kpiConfig.ts` table.
-
-## Exclusion model — side-by-side
-
-No global toggle. Every metric is computed twice in one pass:
-
-- **Before exclusion**: all rows in the sheet.
-- **After exclusion**: rows where `Excluded != '1'`.
-
-Both numbers are shown together everywhere (cards, table cells, chart series).
-
-## Files to change
-
-1. `src/lib/parseWorkbook.ts` — full rewrite.
-   - Iterate every sheet whose name matches a KPI code.
-   - For each row produce: `{ kpiCode, ticket, queue, market: ISO_Language, weekKey, weekLabel, excluded: boolean, breach: boolean }`.
-   - Output `ParsedWorkbook { records, weeks, weekLabels, markets, queues, kpisFound[] }`.
-
-2. `src/lib/aggregate.ts` — rewrite around `records`.
-   - `aggregateKpi(records, kpiCode, { weekKey?, queue?, market? }) → { before: {total, breach, pct}, after: {…} }`.
-   - `kpiTrend(records, kpiCode, lastNWeeks=6) → Array<{ weekLabel, beforePct, afterPct, beforeBreach, afterBreach, total }>`.
-   - `marketBreakdown(records, kpiCode) → per ISO_Language rollup (before & after)`.
-   - `queueBreakdown(records, kpiCode, market) → per Queue rollup (before & after)`.
-
-3. `src/lib/kpiConfig.ts` — add `family: "KSL" | "KM"` and a `direction` (higher-better for KSL, lower-better for KM) so status colors flip correctly for KM.
-
-4. `src/context/DataContext.tsx` — drop the global exclusion toggle; expose `records` + helpers. Keep single-workbook upload (no second exclusion file).
-
-5. `src/components/AppHeader.tsx` — remove the Before/After switch; show parsed-file name + a re-upload button.
-
-6. `src/components/KpiCard.tsx` — show two stacked figures: `Before  XX.X%` and `After  XX.X%` with a small delta, plus breach count `(b / total)` underneath. Status pill driven by the After value vs target.
-
-7. `src/routes/index.tsx` — upload card with detection summary (sheets found, weeks detected, ticket count, markets list).
-
-8. `src/routes/overview.tsx` — KPI grid (all 12 KPIs) using the new cards; summary table columns: `KPI | Target | Before % | After % | Breaches B/A | Total | Status`.
-
-9. `src/routes/trend.tsx` — for each KPI render a Recharts `LineChart` with two lines (Before, After) over the last 6 ISO weeks of `DATE_CLOSE`, dashed target reference line. Week selector defaults to last 6.
-
-10. `src/routes/queues.tsx` — Market filter (ISO_Language) → table of queues with Before/After % per KPI; clicking a queue opens a Sheet showing its 6-week Before/After trend for the selected KPI.
-
-11. `README.md` — update file-format section (sheet-per-KPI, no second file, Excluded column drives the After view).
-
-GitHub Actions workflow at `.github/workflows/deploy.yml` is unchanged.
+## 3. Other improvements
+- **Sticky header + view tabs** so navigation stays visible when scrolling long queue lists.
+- **Empty / partial-upload state** clarifying which file is still missing (currently only a generic prompt).
+- **KPI search / filter chips** above the KPI grid (filter by family: All / KSL / KM, plus free-text search by code).
+- **Compare mode toggle** on Trends: overlay the previous 6-week window as a faint line for quick delta reading.
+- **Accessibility**: add `aria-label`s to chart export buttons and ensure RAG colors also encode via icon (●/▲/■) for color-blind users.
+- **Persist last-used month + KPI** in `sessionStorage` so a refresh keeps context (no data persistence — only UI state).
 
 ## Technical notes
-
-- Parsing stays 100% client-side with `xlsx` (SheetJS) — no data ever leaves the browser, matching the "GitHub Pages, stateless" requirement.
-- ISO week key format `YYYY-Www` (sortable) with display label `Wxx 'yy`.
-- "Breach" detection: `Breach_Description` trimmed string length > 0. (`SLA_N`/`SLA_Code` available for tooltips but not for the boolean.)
-- KM cards/trends invert the status palette (higher % is worse).
-- Empty-state guards on every route when no workbook is loaded.
+- New deps: `html-to-image`, `jspdf` (both pure-JS, edge-safe; we only run them in the browser).
+- New module `src/lib/analyzer/export.ts` with `exportNodeToImage(node, fmt)`, `exportWorkbook(sections)`, `exportViewToPdf(node, title)`.
+- New component `src/components/ExportMenu.tsx` (shadcn `DropdownMenu`) attached to each chart card via a `ref`.
+- Weekly chart refactor lives in `src/routes/index.tsx` Trends section; reusable as `WeeklyTrendChart` component in `src/components/charts/WeeklyTrendChart.tsx`.
+- No backend changes; everything stays client-side and stateless.
 
 ## Out of scope
-
-- Persisting uploads, multi-file merge, auth, server-side processing.
-- A separate exclusion file (your data already carries `Excluded` per row).
+- Server-side rendering of exports, scheduled email reports, multi-page PDF with all KPIs (can follow up).
