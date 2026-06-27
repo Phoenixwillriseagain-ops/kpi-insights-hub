@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
-  Activity, ArrowDown, ArrowUp, BarChart3, ChevronRight, FileSpreadsheet,
+  Activity, ArrowDown, ArrowUp, BarChart3, ChevronRight, Download, FileSpreadsheet,
   Filter, Layers, LineChart as LineChartIcon, Loader2, Moon, Pin, RefreshCw,
   Sparkles, Sun, Target, TrendingUp, Upload, X,
 } from "lucide-react";
 import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart,
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart,
   ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 
@@ -26,6 +26,8 @@ import {
   exclusionImpact, monthLabel, monthlySummary, overallByKpi, queueBreakdown,
   rawOverallByKpi, weekLabel, weeklySummary,
 } from "@/lib/analyzer/compute";
+import { exportDatasetWorkbook } from "@/lib/analyzer/export";
+import { ExportMenu } from "@/components/ExportMenu";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
