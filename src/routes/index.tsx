@@ -885,7 +885,7 @@ const WeeklySection = React.memo(function WeeklySection({ ds, detected }: { ds: 
       })}
     </div>
   );
-}
+});
 
 type WeeklyTableRow = { label: string; total: number; breaches: number; rate: number; rag: "green" | "amber" | "red" | "none"; delta: number | null; prev: number | null };
 function WeeklyTable({ rows, isKM }: { rows: WeeklyTableRow[]; isKM: boolean }) {
