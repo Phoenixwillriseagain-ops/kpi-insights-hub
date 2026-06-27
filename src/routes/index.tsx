@@ -541,7 +541,7 @@ function Analysis({
         ))}
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="glass h-12 w-full justify-start gap-1 rounded-2xl p-1.5">
           <TabTrigger value="overview" icon={BarChart3}>Overview</TabTrigger>
           <TabTrigger value="monthly" icon={LineChartIcon}>Monthly Trend</TabTrigger>
@@ -552,30 +552,31 @@ function Analysis({
           {ds.pcms.length > 0 && <TabTrigger value="ksl5b" icon={Users}>KSL-5b Detail</TabTrigger>}
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-6">
+        <KeepAliveTab value="overview" visited={visited} className="space-y-6">
           <OverviewSection ds={ds} month={month} detected={detectedKpis} />
-        </TabsContent>
-        <TabsContent value="monthly" className="space-y-6">
+        </KeepAliveTab>
+        <KeepAliveTab value="monthly" visited={visited} className="space-y-6">
           <MonthlySection ds={ds} detected={detectedKpis} />
-        </TabsContent>
-        <TabsContent value="weekly" className="space-y-6">
+        </KeepAliveTab>
+        <KeepAliveTab value="weekly" visited={visited} className="space-y-6">
           <WeeklySection ds={ds} detected={detectedKpis} />
-        </TabsContent>
-        <TabsContent value="queues" className="space-y-6">
+        </KeepAliveTab>
+        <KeepAliveTab value="queues" visited={visited} className="space-y-6">
           <QueuesSection ds={ds} month={month} detected={detectedKpis} activeKpi={activeKpi} setActiveKpi={setActiveKpi} />
-        </TabsContent>
-        <TabsContent value="excl" className="space-y-6">
+        </KeepAliveTab>
+        <KeepAliveTab value="excl" visited={visited} className="space-y-6">
           <ExclusionSection ds={ds} month={month} detected={detectedKpis} />
-        </TabsContent>
-        <TabsContent value="quality" className="space-y-6">
+        </KeepAliveTab>
+        <KeepAliveTab value="quality" visited={visited} className="space-y-6">
           <QualityReopenSection ds={ds} month={month} detected={detectedKpis} />
-        </TabsContent>
+        </KeepAliveTab>
         {ds.pcms.length > 0 && (
-          <TabsContent value="ksl5b" className="space-y-6">
+          <KeepAliveTab value="ksl5b" visited={visited} className="space-y-6">
             <Ksl5bDetail ds={ds} month={month} />
-          </TabsContent>
+          </KeepAliveTab>
         )}
       </Tabs>
+
     </main>
   );
 }
