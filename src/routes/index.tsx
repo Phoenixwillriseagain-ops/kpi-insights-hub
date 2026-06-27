@@ -1342,7 +1342,7 @@ const QualityReopenSection = React.memo(function QualityReopenSection({ ds, mont
 /* ─────────────────────────────────────────────────── KSL-5b DETAIL (PCms) */
 
 
-function Ksl5bDetail({ ds, month }: { ds: Dataset; month: string | null }) {
+const Ksl5bDetail = React.memo(function Ksl5bDetail({ ds, month }: { ds: Dataset; month: string | null }) {
   // Filter PCms rows by selected month
   const scopedByMonth = useMemo(() => {
     if (!month) return ds.pcms;
