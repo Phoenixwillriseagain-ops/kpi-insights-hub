@@ -389,12 +389,16 @@ function Analysis({
   );
 }
 
-function Chip({ children, active, onClick }: { children: React.ReactNode; active: boolean; onClick: () => void }) {
+function Chip({ children, active, onClick, label }: { children: React.ReactNode; active: boolean; onClick: () => void; label?: string }) {
   return (
     <button
+      type="button"
       onClick={onClick}
+      aria-pressed={active}
+      aria-label={label}
       className={cn(
-        "rounded-full border px-3 py-1 text-xs font-medium transition",
+        "rounded-full border px-3 py-1 text-xs font-medium transition outline-none",
+        "focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         active
           ? "border-transparent bg-[image:var(--gradient-primary)] text-primary-foreground ring-glow"
           : "border-border/70 bg-card/60 text-foreground hover:border-primary/60 hover:text-primary",
