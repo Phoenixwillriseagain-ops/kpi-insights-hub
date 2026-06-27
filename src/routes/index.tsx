@@ -732,15 +732,17 @@ function Mini({ label, value }: { label: string; value: string }) {
 
 /* ─────────────────────────────────────────────────── Shared panel + helpers */
 
-function Panel({ title, subtitle, badge, children }: { title: string; subtitle?: string; badge?: string; children: React.ReactNode }) {
+function Panel({ title, subtitle, badge, exportName, children }: { title: string; subtitle?: string; badge?: string; exportName?: string; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
   return (
-    <section className="glass overflow-hidden rounded-2xl ring-soft">
+    <section ref={ref} className="glass overflow-hidden rounded-2xl ring-soft">
       <header className="flex items-center gap-3 border-b border-border/60 px-5 py-3">
         <div className="min-w-0">
           <h2 className="font-display text-sm font-bold leading-tight">{title}</h2>
           {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
         </div>
         {badge && <Badge variant="secondary" className="ml-auto text-[10px]">{badge}</Badge>}
+        {exportName && <div className={cn(badge ? "" : "ml-auto")}><ExportMenu targetRef={ref} name={exportName} /></div>}
       </header>
       <div className="p-4">{children}</div>
     </section>
