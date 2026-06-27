@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
-  Activity, ArrowDown, ArrowUp, BarChart3, ChevronRight, Download, FileSpreadsheet,
-  Filter, Layers, LineChart as LineChartIcon, Loader2, Moon, Pin, RefreshCw,
+  Activity, AlertTriangle, ArrowDown, ArrowUp, BarChart3, CheckCircle2, ChevronRight, Download, FileSpreadsheet,
+  Filter, Info, Layers, LineChart as LineChartIcon, Loader2, Moon, Pin, RefreshCw,
   Sparkles, Sun, Target, TrendingUp, Upload, Users, X,
 } from "lucide-react";
 import {
@@ -29,6 +29,7 @@ import {
 import { exportDatasetWorkbook } from "@/lib/analyzer/export";
 import { ExportMenu } from "@/components/ExportMenu";
 import { PCMS_CATEGORIES, pcmsTopAgents, pcmsWeeklyCounts } from "@/lib/analyzer/parsePcms";
+import { buildReport, type ValidationReport, type ValidationIssue } from "@/lib/analyzer/validate";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
@@ -53,6 +54,8 @@ function Dashboard() {
   const [activeKpi, setActiveKpi] = useState<KpiCode>("KSL-2c");
   const [busy, setBusy] = useState(false);
   const [dark, setDark] = useState(false);
+  const [report, setReport] = useState<ValidationReport | null>(null);
+  const [override, setOverride] = useState(false);
 
   const toggleTheme = () => {
     setDark((d) => {
@@ -71,10 +74,13 @@ function Dashboard() {
       }),
     );
     setFiles((s) => ({ ...s, [slot]: [...s[slot], ...loaded] }));
+    setReport(null); setOverride(false);
   }, []);
 
-  const removeFile = (slot: Slot, idx: number) =>
+  const removeFile = (slot: Slot, idx: number) => {
     setFiles((s) => ({ ...s, [slot]: s[slot].filter((_, i) => i !== idx) }));
+    setReport(null); setOverride(false);
+  };
 
   const canRun = files.sla.some((f) => !f.error);
 
@@ -82,6 +88,18 @@ function Dashboard() {
     setBusy(true);
     try {
       await new Promise((r) => setTimeout(r, 50));
+      const rep = buildReport(
+        files.sla.filter((f) => f.wb).map((f) => ({ name: f.name, wb: f.wb })),
+        files.breach.filter((f) => f.wb).map((f) => ({ name: f.name, wb: f.wb })),
+        files.excl.filter((f) => f.wb).map((f) => ({ name: f.name, wb: f.wb })),
+      );
+      setReport(rep);
+      if (!rep.ok && !override) {
+        toast.error("Fix required columns before running", {
+          description: "See the validation panel for details, or toggle “Run anyway” to bypass.",
+        });
+        return;
+      }
       const ds = buildDataset(
         files.sla.filter((f) => f.wb).map((f) => f.wb!),
         files.breach.filter((f) => f.wb).map((f) => f.wb!),
@@ -97,7 +115,7 @@ function Dashboard() {
     } finally { setBusy(false); }
   };
 
-  const reset = () => { setDataset(null); setFiles({ sla: [], breach: [], excl: [] }); };
+  const reset = () => { setDataset(null); setFiles({ sla: [], breach: [], excl: [] }); setReport(null); setOverride(false); };
 
   return (
     <div className="min-h-screen">
@@ -112,6 +130,9 @@ function Dashboard() {
           onRun={runAnalysis}
           canRun={canRun}
           busy={busy}
+          report={report}
+          override={override}
+          setOverride={setOverride}
         />
       ) : (
         <Analysis
@@ -172,7 +193,7 @@ const SLOT_META: Record<Slot, { title: string; desc: string; required?: boolean;
 };
 
 function UploadHero({
-  files, onAdd, onRemove, onRun, canRun, busy,
+  files, onAdd, onRemove, onRun, canRun, busy, report, override, setOverride,
 }: {
   files: Record<Slot, LoadedFile[]>;
   onAdd: (slot: Slot, list: FileList | File[]) => void;
@@ -180,7 +201,11 @@ function UploadHero({
   onRun: () => void;
   canRun: boolean;
   busy: boolean;
+  report: ValidationReport | null;
+  override: boolean;
+  setOverride: (v: boolean) => void;
 }) {
+  const hasErrors = !!report && !report.ok;
   return (
     <main className="mx-auto max-w-6xl px-6 pt-12 pb-16">
       <section className="mb-12 text-center">
@@ -210,17 +235,24 @@ function UploadHero({
         ))}
       </div>
 
-      <div className="mt-10 flex justify-center">
+      {report && <ValidationPanel report={report} override={override} setOverride={setOverride} />}
+
+      <div className="mt-10 flex flex-col items-center justify-center gap-2">
         <Button
           size="lg"
-          disabled={!canRun || busy}
+          disabled={!canRun || busy || (hasErrors && !override)}
           onClick={onRun}
           className="group h-12 rounded-full bg-[image:var(--gradient-primary)] px-8 text-base font-semibold text-primary-foreground ring-glow transition hover:opacity-95 disabled:opacity-40"
         >
           {busy
             ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Crunching…</>
-            : <><Activity className="mr-2 h-4 w-4" /> Run analysis <ChevronRight className="ml-1 h-4 w-4 transition group-hover:translate-x-0.5" /></>}
+            : <><Activity className="mr-2 h-4 w-4" /> {report ? "Re-run analysis" : "Run analysis"} <ChevronRight className="ml-1 h-4 w-4 transition group-hover:translate-x-0.5" /></>}
         </Button>
+        {hasErrors && (
+          <p className="text-[11px] text-muted-foreground">
+            Fix the validation errors above or enable “Run anyway” to bypass.
+          </p>
+        )}
       </div>
 
       <div className="mt-12 grid grid-cols-1 gap-3 text-xs text-muted-foreground sm:grid-cols-3">
@@ -241,6 +273,69 @@ function Tip({ icon: Icon, label, body }: { icon: typeof Target; label: string; 
       </div>
       <p>{body}</p>
     </div>
+  );
+}
+
+function ValidationPanel({ report, override, setOverride }: { report: ValidationReport; override: boolean; setOverride: (v: boolean) => void }) {
+  const errors = report.issues.filter((i) => i.severity === "error");
+  const warns = report.issues.filter((i) => i.severity === "warn");
+  const infos = report.issues.filter((i) => i.severity === "info");
+  if (report.ok && warns.length === 0) {
+    return (
+      <div className="mt-8 glass flex items-center gap-3 rounded-2xl border border-[color:var(--success)]/30 bg-[color:var(--success)]/5 px-4 py-3 text-sm">
+        <CheckCircle2 className="h-4 w-4 text-[color:var(--success)]" />
+        <span className="font-semibold text-[color:var(--success)]">Looks good</span>
+        <span className="text-muted-foreground">All required columns detected.</span>
+      </div>
+    );
+  }
+  const tone = errors.length
+    ? "border-[color:var(--danger)]/40 bg-[color:var(--danger)]/5"
+    : "border-[color:var(--warning)]/40 bg-[color:var(--warning)]/5";
+  return (
+    <section className={cn("mt-8 glass rounded-2xl border", tone)} aria-label="Upload validation">
+      <header className="flex items-center gap-2 border-b border-border/40 px-4 py-3">
+        {errors.length
+          ? <AlertTriangle className="h-4 w-4 text-[color:var(--danger)]" />
+          : <Info className="h-4 w-4 text-[color:var(--warning)]" />}
+        <h3 className="text-sm font-bold">
+          Validation · {errors.length} error{errors.length === 1 ? "" : "s"} · {warns.length} warning{warns.length === 1 ? "" : "s"}
+        </h3>
+        {errors.length > 0 && (
+          <label className="ml-auto inline-flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={override}
+              onChange={(e) => setOverride(e.target.checked)}
+              className="h-3.5 w-3.5 accent-[color:var(--primary)]"
+            />
+            Run anyway
+          </label>
+        )}
+      </header>
+      <ul className="max-h-72 divide-y divide-border/40 overflow-y-auto">
+        {[...errors, ...warns, ...infos].map((iss, i) => (
+          <IssueRow key={i} issue={iss} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function IssueRow({ issue }: { issue: ValidationIssue }) {
+  const color = issue.severity === "error" ? "var(--danger)" : issue.severity === "warn" ? "var(--warning)" : "var(--primary)";
+  return (
+    <li className="flex items-start gap-3 px-4 py-2.5 text-xs">
+      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: color }} />
+      <div className="min-w-0 flex-1">
+        <p className="truncate">
+          <span className="font-semibold text-foreground">{issue.file}</span>
+          {issue.sheet && <span className="text-muted-foreground"> · sheet “{issue.sheet}”</span>}
+        </p>
+        <p style={{ color }}>{issue.message}</p>
+        {issue.hint && <p className="text-muted-foreground">{issue.hint}</p>}
+      </div>
+    </li>
   );
 }
 
@@ -923,7 +1018,7 @@ function Panel({ title, subtitle, badge, exportName, children }: { title: string
           <h2 className="font-display text-sm font-bold leading-tight">{title}</h2>
           {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
         </div>
-        {badge && <Badge variant="secondary" className="ml-auto text-[10px]">{badge}</Badge>}
+        {badge && <Badge data-export-nowrap variant="secondary" className="ml-auto whitespace-nowrap text-[10px]">{badge}</Badge>}
         {exportName && <div className={cn(badge ? "" : "ml-auto")}><ExportMenu targetRef={ref} name={exportName} /></div>}
       </header>
       <div className="p-4">{children}</div>
