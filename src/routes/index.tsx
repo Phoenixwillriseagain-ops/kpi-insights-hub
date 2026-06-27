@@ -348,11 +348,15 @@ function Analysis({
   return (
     <main className="mx-auto max-w-7xl px-6 py-8">
       {/* Period chips */}
-      <div className="mb-6 flex flex-wrap items-center gap-2">
+      <div
+        className="mb-6 flex flex-wrap items-center gap-2"
+        role="group"
+        aria-label="Filter by period"
+      >
         <span className="mr-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Period</span>
-        <Chip active={month === null} onClick={() => setMonth(null)}>All months</Chip>
+        <Chip active={month === null} onClick={() => setMonth(null)} label="All months">All months</Chip>
         {ds.months.map((m) => (
-          <Chip key={m} active={month === m} onClick={() => setMonth(m)}>{monthLabel(m)}</Chip>
+          <Chip key={m} active={month === m} onClick={() => setMonth(m)} label={monthLabel(m)}>{monthLabel(m)}</Chip>
         ))}
       </div>
 
