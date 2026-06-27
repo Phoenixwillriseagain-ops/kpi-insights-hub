@@ -87,8 +87,12 @@ function Dashboard() {
 
   const runAnalysis = async () => {
     setBusy(true);
+    // let the spinner paint before we burn the main thread
+    const yieldToBrowser = () => new Promise<void>((r) =>
+      requestAnimationFrame(() => setTimeout(r, 0)),
+    );
     try {
-      await new Promise((r) => setTimeout(r, 50));
+      await yieldToBrowser();
       const rep = buildReport(
         files.sla.filter((f) => f.wb).map((f) => ({ name: f.name, wb: f.wb })),
         files.breach.filter((f) => f.wb).map((f) => ({ name: f.name, wb: f.wb })),
@@ -98,10 +102,11 @@ function Dashboard() {
       setExclMappings(buildExclMappings(files.excl.filter((f) => f.wb).map((f) => ({ name: f.name, wb: f.wb }))));
       if (!rep.ok && !override) {
         toast.error("Fix required columns before running", {
-          description: "See the validation panel for details, or toggle “Run anyway” to bypass.",
+          description: "See the validation panel for details, or toggle \u201CRun anyway\u201D to bypass.",
         });
         return;
       }
+      await yieldToBrowser();
       const ds = buildDataset(
         files.sla.filter((f) => f.wb).map((f) => f.wb!),
         files.breach.filter((f) => f.wb).map((f) => f.wb!),
@@ -111,11 +116,15 @@ function Dashboard() {
         toast.error("No KPI sheets detected", { description: "Sheet names should match KSL-1, KSL-2a, …, KM-1, KM-2." });
         return;
       }
+      await yieldToBrowser();
       setDataset(ds);
       setActiveMonth(null);
       toast.success("Analysis ready", { description: `${ds.months.length} months · ${ds.weeks.length} weeks · ${Object.keys(ds.sla).length} KPIs` });
+    } catch (e) {
+      toast.error("Analysis failed", { description: e instanceof Error ? e.message : String(e) });
     } finally { setBusy(false); }
   };
+
 
   const reset = () => { setDataset(null); setFiles({ sla: [], breach: [], excl: [] }); setReport(null); setOverride(false); setExclMappings([]); };
 
