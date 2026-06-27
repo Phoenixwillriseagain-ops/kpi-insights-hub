@@ -611,7 +611,7 @@ function TabTrigger({ value, icon: Icon, children }: { value: string; icon: type
 
 /* ─────────────────────────────────────────────────────── OVERVIEW */
 
-function OverviewSection({ ds, month, detected }: { ds: Dataset; month: string | null; detected: KpiCode[] }) {
+const OverviewSection = React.memo(function OverviewSection({ ds, month, detected }: { ds: Dataset; month: string | null; detected: KpiCode[] }) {
   const totals = useMemo(() => {
     let total = 0, breaches = 0, excluded = 0;
     detected.forEach((c) => {
