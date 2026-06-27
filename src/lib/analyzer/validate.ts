@@ -52,11 +52,83 @@ function findMissing(headers: string[], required: Record<string, string[]>): str
     .map(([k]) => k);
 }
 
+// Dice coefficient on bigrams for fuzzy header similarity.
+function bigrams(s: string): Set<string> {
+  const n = norm(s); const out = new Set<string>();
+  for (let i = 0; i < n.length - 1; i++) out.add(n.slice(i, i + 2));
+  return out;
+}
+function dice(a: string, b: string): number {
+  const A = bigrams(a), B = bigrams(b);
+  if (!A.size || !B.size) return 0;
+  let inter = 0; A.forEach((g) => B.has(g) && inter++);
+  return (2 * inter) / (A.size + B.size);
+}
+export function bestMatch(headers: string[], synonyms: string[]): { header: string; score: number } | null {
+  let best: { header: string; score: number } | null = null;
+  for (const h of headers) {
+    for (const s of synonyms) {
+      const score = norm(h) === norm(s) ? 1 : Math.max(
+        dice(h, s),
+        norm(h).includes(norm(s)) || norm(s).includes(norm(h)) ? 0.7 : 0,
+      );
+      if (!best || score > best.score) best = { header: h, score };
+    }
+  }
+  return best;
+}
 function suggest(headers: string[], required: Record<string, string[]>, label: string): string {
   const syn = required[label] ?? [];
-  // crude similarity: any header containing one of synonyms (substring)
-  const candidate = headers.find((h) => syn.some((s) => norm(h).includes(norm(s).slice(0, 4))));
-  return candidate ? `Closest header: "${candidate}". Rename to "${syn[0]}".` : `Add a "${syn[0]}" column.`;
+  const m = bestMatch(headers, syn);
+  if (m && m.score >= 0.4) return `Closest header: "${m.header}" (${Math.round(m.score * 100)}% match). Rename to "${syn[0]}".`;
+  return `Add a "${syn[0]}" column.`;
+}
+
+export type MappingSuggestion = {
+  required: string;          // canonical name (e.g. "Excluded")
+  canonical: string;         // suggested rename target (e.g. "EXCLUDED")
+  candidate: string | null;  // closest existing header
+  score: number;             // 0..1
+  status: "ok" | "rename" | "missing";
+};
+export type SheetMapping = {
+  file: string;
+  sheet: string;
+  headers: string[];
+  rows: MappingSuggestion[];
+};
+
+function buildSheetMapping(
+  file: string, sheet: string, headers: string[], required: Record<string, string[]>,
+): SheetMapping {
+  const have = new Set(headers.map(norm));
+  const rows: MappingSuggestion[] = Object.entries(required).map(([req, syn]) => {
+    const exact = syn.find((s) => have.has(norm(s)));
+    if (exact) {
+      const header = headers.find((h) => norm(h) === norm(exact))!;
+      return { required: req, canonical: syn[0], candidate: header, score: 1, status: "ok" };
+    }
+    const m = bestMatch(headers, syn);
+    if (m && m.score >= 0.4) return { required: req, canonical: syn[0], candidate: m.header, score: m.score, status: "rename" };
+    return { required: req, canonical: syn[0], candidate: m?.header ?? null, score: m?.score ?? 0, status: "missing" };
+  });
+  return { file, sheet, headers, rows };
+}
+
+export function buildExclMappings(files: { name: string; wb?: XLSX.WorkBook }[]): SheetMapping[] {
+  const out: SheetMapping[] = [];
+  files.forEach(({ name, wb }) => {
+    if (!wb) return;
+    wb.SheetNames.forEach((sheet) => {
+      if (!matchKpi(sheet)) return;
+      const headers = pickHeader(wb.Sheets[sheet]);
+      if (headers.length === 0) return;
+      const mapping = buildSheetMapping(name, sheet, headers, EXCL_REQUIRED);
+      // Only surface sheets that need attention.
+      if (mapping.rows.some((r) => r.status !== "ok")) out.push(mapping);
+    });
+  });
+  return out;
 }
 
 // Sheets that the KSL-4 & KM-1 analysis tab depends on.
