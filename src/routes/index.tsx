@@ -28,7 +28,7 @@ import {
 } from "@/lib/analyzer/compute";
 import { exportDatasetWorkbook } from "@/lib/analyzer/export";
 import { ExportMenu } from "@/components/ExportMenu";
-import { PCMS_CATEGORIES, pcmsByCategory, pcmsTopAgents, pcmsWeeklyCounts, type PcmsRow } from "@/lib/analyzer/parsePcms";
+import { PCMS_CATEGORIES, pcmsByCategory, pcmsTopAgents, pcmsWeeklyCounts } from "@/lib/analyzer/parsePcms";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
