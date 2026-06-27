@@ -74,7 +74,7 @@ function TrendPage() {
       <section className="mt-6 rounded-2xl border border-border bg-card p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <div className="text-xs text-muted-foreground">
-            Latest: <span className="font-semibold text-foreground">{latest?.tickets === 0 ? "—" : `${(latest?.rate ?? 0 * 100).toFixed(1)}%`}</span>
+            Latest: <span className="font-semibold text-foreground">{!latest || latest.tickets === 0 ? "—" : `${(latest.rate * 100).toFixed(1)}%`}</span>
           </div>
           <div className="text-xs text-muted-foreground">
             {totals.tickets.toLocaleString()} tickets · {totals.breaches.toLocaleString()} breaches
