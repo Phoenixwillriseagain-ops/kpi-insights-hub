@@ -636,7 +636,7 @@ const OverviewSection = React.memo(function OverviewSection({ ds, month, detecte
       </div>
     </>
   );
-}
+});
 
 function StatBlock({ label, value, sub, icon: Icon, accent }: {
   label: string; value: string; sub?: string; icon: typeof Target; accent: "primary" | "success" | "warning" | "danger";
