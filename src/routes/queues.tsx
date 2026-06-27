@@ -158,7 +158,7 @@ function QueuesPage() {
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="week" tick={{ fontSize: 11 }} />
                     <YAxis domain={yDomain} tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}%`} />
-                    <Tooltip formatter={(v: number | null) => (v == null ? "—" : `${v}%`)} />
+                    <Tooltip formatter={(v) => (v == null ? "—" : `${v}%`)} />
                     <Legend />
                     <ReferenceLine y={targetPct} stroke="#94a3b8" strokeDasharray="6 4" />
                     <Line type="monotone" name="Before" dataKey="before" stroke="#94a3b8" strokeWidth={2} dot={{ r: 3 }} connectNulls />

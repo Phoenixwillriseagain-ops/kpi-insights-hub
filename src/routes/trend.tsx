@@ -84,7 +84,7 @@ function TrendPage() {
                 stroke="hsl(var(--muted-foreground))"
                 tickFormatter={(v) => `${v}%`}
               />
-              <Tooltip formatter={(v: number | null) => (v == null ? "—" : `${v}%`)} />
+              <Tooltip formatter={(v) => (v == null ? "—" : `${v}%`)} />
               <Legend />
               <ReferenceLine
                 y={targetPct}
