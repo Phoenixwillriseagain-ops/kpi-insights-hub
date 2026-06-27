@@ -32,7 +32,8 @@ import type { ValidationReport, ValidationIssue, SheetMapping } from "@/lib/anal
 import type { WorkerInput, WorkerOutput } from "@/lib/analyzer/worker";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/")(
+  {
   ssr: false,
   head: () => ({
     meta: [
@@ -263,7 +264,7 @@ function UploadHero({
         </Button>
         {hasErrors && (
           <p className="text-[11px] text-muted-foreground">
-            Fix the validation errors above or enable “Run anyway” to bypass.
+            Fix the validation errors above or enable "Run anyway" to bypass.
           </p>
         )}
       </div>
@@ -343,7 +344,7 @@ function IssueRow({ issue }: { issue: ValidationIssue }) {
       <div className="min-w-0 flex-1">
         <p className="truncate">
           <span className="font-semibold text-foreground">{issue.file}</span>
-          {issue.sheet && <span className="text-muted-foreground"> · sheet “{issue.sheet}”</span>}
+          {issue.sheet && <span className="text-muted-foreground"> · sheet "{issue.sheet}"</span>}
         </p>
         <p style={{ color }}>{issue.message}</p>
         {issue.hint && <p className="text-muted-foreground">{issue.hint}</p>}
@@ -370,7 +371,7 @@ function ExclusionMappingPreview({ mappings }: { mappings: SheetMapping[] }) {
           <div key={i} className="rounded-xl border border-border/40 bg-card/40 p-3">
             <p className="mb-2 text-xs font-semibold">
               <span className="text-foreground">{m.file}</span>
-              <span className="text-muted-foreground"> · sheet “{m.sheet}”</span>
+              <span className="text-muted-foreground"> · sheet "{m.sheet}"</span>
             </p>
             <div className="overflow-hidden rounded-lg border border-border/40">
               <table className="w-full text-xs">
@@ -509,6 +510,24 @@ function UploadCard({ slot, files, onAdd, onRemove }: {
 
 /* ──────────────────────────────────────────────────────────── ANALYSIS */
 
+/**
+ * Keeps track of which tabs have ever been activated so we can mount their
+ * content lazily (only on first visit) and keep it mounted after that to
+ * avoid re-render costs on every tab switch.
+ */
+function useMountedTabs(activeTab: string) {
+  const [mounted, setMounted] = useState<Set<string>>(() => new Set([activeTab]));
+  useEffect(() => {
+    setMounted((prev) => {
+      if (prev.has(activeTab)) return prev;
+      const next = new Set(prev);
+      next.add(activeTab);
+      return next;
+    });
+  }, [activeTab]);
+  return mounted;
+}
+
 function Analysis({
   ds, month, setMonth, activeKpi, setActiveKpi,
 }: {
@@ -523,7 +542,7 @@ function Analysis({
     [ds],
   );
   const [activeTab, setActiveTab] = useState<string>("overview");
-
+  const mountedTabs = useMountedTabs(activeTab);
 
   return (
     <main className="mx-auto max-w-7xl px-6 py-8">
@@ -551,27 +570,28 @@ function Analysis({
           {ds.pcms.length > 0 && <TabTrigger value="ksl5b" icon={Users}>KSL-5b Detail</TabTrigger>}
         </TabsList>
 
+        {/* Each tab content is only mounted when first visited, then kept alive */}
         <TabsContent value="overview" className="space-y-6">
-          <OverviewSection ds={ds} month={month} detected={detectedKpis} />
+          {mountedTabs.has("overview") && <OverviewSection ds={ds} month={month} detected={detectedKpis} />}
         </TabsContent>
         <TabsContent value="monthly" className="space-y-6">
-          <MonthlySection ds={ds} detected={detectedKpis} />
+          {mountedTabs.has("monthly") && <MonthlySection ds={ds} detected={detectedKpis} />}
         </TabsContent>
         <TabsContent value="weekly" className="space-y-6">
-          <WeeklySection ds={ds} detected={detectedKpis} />
+          {mountedTabs.has("weekly") && <WeeklySection ds={ds} detected={detectedKpis} />}
         </TabsContent>
         <TabsContent value="queues" className="space-y-6">
-          <QueuesSection ds={ds} month={month} detected={detectedKpis} activeKpi={activeKpi} setActiveKpi={setActiveKpi} />
+          {mountedTabs.has("queues") && <QueuesSection ds={ds} month={month} detected={detectedKpis} activeKpi={activeKpi} setActiveKpi={setActiveKpi} />}
         </TabsContent>
         <TabsContent value="excl" className="space-y-6">
-          <ExclusionSection ds={ds} month={month} detected={detectedKpis} />
+          {mountedTabs.has("excl") && <ExclusionSection ds={ds} month={month} detected={detectedKpis} />}
         </TabsContent>
         <TabsContent value="quality" className="space-y-6">
-          <QualityReopenSection ds={ds} month={month} detected={detectedKpis} />
+          {mountedTabs.has("quality") && <QualityReopenSection ds={ds} month={month} detected={detectedKpis} />}
         </TabsContent>
         {ds.pcms.length > 0 && (
           <TabsContent value="ksl5b" className="space-y-6">
-            <Ksl5bDetail ds={ds} month={month} />
+            {mountedTabs.has("ksl5b") && <Ksl5bDetail ds={ds} month={month} />}
           </TabsContent>
         )}
       </Tabs>
@@ -844,7 +864,6 @@ const WeeklySection = React.memo(function WeeklySection({ ds, detected }: { ds: 
           : rag === "amber" ? "var(--warning)"
           : rag === "red" ? "var(--danger)"
           : "var(--muted-foreground)";
-        // Pad y-axis so labels never collide with the axis edge.
         const values = data.map((d) => d.rate).filter((v) => Number.isFinite(v));
         const minY = values.length ? Math.floor(Math.min(...values, meta.target) - 1.5) : "auto";
         const maxY = values.length ? Math.ceil(Math.max(...values, meta.target) + 1.5) : "auto";
@@ -1366,13 +1385,11 @@ const QualityReopenSection = React.memo(function QualityReopenSection({ ds, mont
 
 
 const Ksl5bDetail = React.memo(function Ksl5bDetail({ ds, month }: { ds: Dataset; month: string | null }) {
-  // Filter PCms rows by selected month
   const scopedByMonth = useMemo(() => {
     if (!month) return ds.pcms;
     return ds.pcms.filter((r) => r.monthKey === month);
   }, [ds.pcms, month]);
 
-  // Week list available in current month scope
   const availableWeeks = useMemo(() => {
     const s = new Set<string>();
     scopedByMonth.forEach((r) => { if (r.weekKey) s.add(r.weekKey); });
@@ -1397,7 +1414,6 @@ const Ksl5bDetail = React.memo(function Ksl5bDetail({ ds, month }: { ds: Dataset
     );
   }, [scoped, activeCat, activeAgent, search]);
 
-  // Reason mix — sorted horizontal bar of category totals, split KO/NOK
   const reasonMix = useMemo(() => {
     const map = new Map<number, { id: number; label: string; color: string; ko: number; nok: number; total: number }>();
     PCMS_CATEGORIES.forEach((c) => map.set(c.id, { id: c.id, label: `${c.id}. ${c.label}`, color: c.color, ko: 0, nok: 0, total: 0 }));
