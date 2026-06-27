@@ -808,3 +808,71 @@ function ChartTip({ active, payload, label, suffix = "" }: any) {
     </div>
   );
 }
+
+function RichTip({ active, payload, label, meta }: any) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload ?? {};
+  const rate: number = Number(row.rate ?? 0);
+  const prev: number | null = row.prev != null ? Number(row.prev) : null;
+  const delta = prev == null ? null : rate - prev;
+  const gap = rate - meta.target;
+  const ragColor =
+    row.rag === "green" ? "var(--success)"
+    : row.rag === "amber" ? "var(--warning)"
+    : row.rag === "red" ? "var(--danger)"
+    : "var(--muted-foreground)";
+  const ragText = ragLabel(row.rag ?? "none", meta.isKM);
+  const gapGood = meta.isKM ? gap <= 0 : gap >= 0;
+  return (
+    <div
+      role="tooltip"
+      className="glass min-w-[180px] rounded-xl border border-border/60 px-3 py-2 text-xs shadow-md"
+    >
+      <div className="mb-1 flex items-center justify-between gap-3">
+        <span className="font-semibold">{label}</span>
+        <span
+          className="rounded-full border px-1.5 py-0.5 text-[9px] font-bold tracking-wide"
+          style={{ color: ragColor, borderColor: ragColor, backgroundColor: `color-mix(in oklab, ${ragColor} 15%, transparent)` }}
+        >
+          {ragText}
+        </span>
+      </div>
+      <p className="tabular-nums">
+        <span className="text-muted-foreground">Rate</span>{" "}
+        <span className="font-semibold" style={{ color: ragColor }}>{rate.toFixed(1)}%</span>
+      </p>
+      <p className="tabular-nums text-muted-foreground">
+        Target {meta.targetLabel} ·{" "}
+        <span style={{ color: gapGood ? "var(--success)" : "var(--danger)" }}>
+          {gap >= 0 ? "+" : ""}{gap.toFixed(1)}pp
+        </span>
+      </p>
+      {delta != null && (
+        <p className="tabular-nums text-muted-foreground">
+          Δ vs prior{" "}
+          <span style={{ color: (meta.isKM ? delta < 0 : delta > 0) ? "var(--success)" : delta === 0 ? "var(--muted-foreground)" : "var(--danger)" }}>
+            {delta > 0 ? "▲" : delta < 0 ? "▼" : "■"} {Math.abs(delta).toFixed(1)}pp
+          </span>
+        </p>
+      )}
+      {row.total != null && (
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          {Number(row.total).toLocaleString()} tickets · {Number(row.breaches ?? 0).toLocaleString()} breaches
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Amber threshold above/below which RAG flips from green→amber, used as a visual zone band.
+function amberBound(meta: { target: number; isKM: boolean }) {
+  return meta.isKM ? meta.target * 1.5 : meta.target - 5;
+}
+
+// Inject prev/delta on each datum so the tooltip can show week-over-week change.
+function withDeltas<T extends { rate: number }>(rows: T[]): (T & { prev: number | null; delta: number | null })[] {
+  return rows.map((r, i) => {
+    const prev = i > 0 ? rows[i - 1].rate : null;
+    return { ...r, prev, delta: prev == null ? null : r.rate - prev };
+  });
+}
