@@ -271,21 +271,35 @@ function UploadCard({ slot, files, onAdd, onRemove }: {
       <div
         role="button"
         tabIndex={0}
+        aria-label={`Upload ${meta.title} workbook. Drop an Excel file or press Enter to browse.`}
+        aria-describedby={`drop-help-${slot}`}
         onClick={() => ref.current?.click()}
-        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && ref.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            ref.current?.click();
+          }
+        }}
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
         onDragLeave={() => setDrag(false)}
         onDrop={(e) => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files.length) onAdd(e.dataTransfer.files); }}
         className={cn(
-          "mt-4 cursor-pointer rounded-2xl border-2 border-dashed p-6 text-center transition",
+          "mt-4 cursor-pointer rounded-2xl border-2 border-dashed p-6 text-center transition outline-none",
+          "focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/40",
           drag ? "border-primary bg-primary/5" : "border-border/60 hover:border-primary/60 hover:bg-secondary/40",
         )}
       >
-        <Upload className="mx-auto mb-2 h-5 w-5 text-muted-foreground" />
+        <Upload className="mx-auto mb-2 h-5 w-5 text-muted-foreground" aria-hidden="true" />
         <p className="text-sm font-semibold">Drop .xlsx here</p>
-        <p className="text-[11px] text-muted-foreground">or click to browse</p>
+        <p id={`drop-help-${slot}`} className="text-[11px] text-muted-foreground">or click to browse</p>
         <input
-          ref={ref} type="file" accept=".xlsx,.xls" multiple className="hidden"
+          ref={ref}
+          type="file"
+          accept=".xlsx,.xls"
+          multiple
+          className="sr-only"
+          aria-label={`${meta.title} file input`}
+          tabIndex={-1}
           onChange={(e) => { if (e.target.files?.length) { onAdd(e.target.files); e.currentTarget.value = ""; } }}
         />
       </div>
