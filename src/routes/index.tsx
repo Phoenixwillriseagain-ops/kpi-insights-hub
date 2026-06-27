@@ -28,6 +28,7 @@ import {
 } from "@/lib/analyzer/compute";
 import { exportDatasetWorkbook } from "@/lib/analyzer/export";
 import { ExportMenu } from "@/components/ExportMenu";
+import { DeferredMount } from "@/components/DeferredMount";
 import { PCMS_CATEGORIES, pcmsTopAgents, pcmsWeeklyCounts } from "@/lib/analyzer/parsePcms";
 import { buildReport, buildExclMappings, type ValidationReport, type ValidationIssue, type SheetMapping } from "@/lib/analyzer/validate";
 import { cn } from "@/lib/utils";
@@ -610,7 +611,7 @@ function TabTrigger({ value, icon: Icon, children }: { value: string; icon: type
 
 /* ─────────────────────────────────────────────────────── OVERVIEW */
 
-function OverviewSection({ ds, month, detected }: { ds: Dataset; month: string | null; detected: KpiCode[] }) {
+const OverviewSection = React.memo(function OverviewSection({ ds, month, detected }: { ds: Dataset; month: string | null; detected: KpiCode[] }) {
   const totals = useMemo(() => {
     let total = 0, breaches = 0, excluded = 0;
     detected.forEach((c) => {
@@ -635,7 +636,7 @@ function OverviewSection({ ds, month, detected }: { ds: Dataset; month: string |
       </div>
     </>
   );
-}
+});
 
 function StatBlock({ label, value, sub, icon: Icon, accent }: {
   label: string; value: string; sub?: string; icon: typeof Target; accent: "primary" | "success" | "warning" | "danger";
@@ -755,7 +756,7 @@ function RagBadge({ rag, isKM }: { rag: "green" | "amber" | "red" | "none"; isKM
 
 /* ─────────────────────────────────────────────────── MONTHLY */
 
-function MonthlySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) {
+const MonthlySection = React.memo(function MonthlySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) {
   return (
     <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
       {detected.map((code) => {
@@ -803,11 +804,11 @@ function MonthlySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) 
       })}
     </div>
   );
-}
+});
 
 /* ─────────────────────────────────────────────────── WEEKLY */
 
-function WeeklySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) {
+const WeeklySection = React.memo(function WeeklySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) {
   return (
     <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
       {detected.map((code) => {
@@ -884,7 +885,7 @@ function WeeklySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) {
       })}
     </div>
   );
-}
+});
 
 type WeeklyTableRow = { label: string; total: number; breaches: number; rate: number; rag: "green" | "amber" | "red" | "none"; delta: number | null; prev: number | null };
 function WeeklyTable({ rows, isKM }: { rows: WeeklyTableRow[]; isKM: boolean }) {
@@ -931,7 +932,7 @@ function WeeklyTable({ rows, isKM }: { rows: WeeklyTableRow[]; isKM: boolean }) 
 
 /* ─────────────────────────────────────────────────── QUEUES */
 
-function QueuesSection({
+const QueuesSection = React.memo(function QueuesSection({
   ds, month, detected, activeKpi, setActiveKpi,
 }: { ds: Dataset; month: string | null; detected: KpiCode[]; activeKpi: KpiCode; setActiveKpi: (k: KpiCode) => void }) {
   const safe = detected.includes(activeKpi) ? activeKpi : (detected[0] ?? "KSL-2c");
@@ -1044,7 +1045,7 @@ function QueuesSection({
       </Panel>
     </>
   );
-}
+});
 
 /* ─────────────────────────────────────────────────── EXCLUSION IMPACT */
 
@@ -1117,7 +1118,7 @@ function Panel({ title, subtitle, badge, exportName, children }: { title: string
         {badge && <Badge data-export-nowrap variant="secondary" className="ml-auto whitespace-nowrap text-[10px]">{badge}</Badge>}
         {exportName && <div className={cn(badge ? "" : "ml-auto")}><ExportMenu targetRef={ref} name={exportName} /></div>}
       </header>
-      <div className="p-4">{children}</div>
+      <div className="p-4"><DeferredMount>{children}</DeferredMount></div>
     </section>
   );
 }
@@ -1210,7 +1211,7 @@ function ExportableTile({ ds, code, month }: { ds: Dataset; code: KpiCode; month
 }
 
 
-function QualityReopenSection({ ds, month, detected }: { ds: Dataset; month: string | null; detected: KpiCode[] }) {
+const QualityReopenSection = React.memo(function QualityReopenSection({ ds, month, detected }: { ds: Dataset; month: string | null; detected: KpiCode[] }) {
   const codes = (["KSL-4", "KM-1"] as KpiCode[]).filter((c) => detected.includes(c));
   if (codes.length === 0) {
     return <Empty message="Neither KSL-4 nor KM-1 sheets were detected in the uploaded SLA workbook." />;
@@ -1336,12 +1337,12 @@ function QualityReopenSection({ ds, month, detected }: { ds: Dataset; month: str
       })}
     </>
   );
-}
+});
 
 /* ─────────────────────────────────────────────────── KSL-5b DETAIL (PCms) */
 
 
-function Ksl5bDetail({ ds, month }: { ds: Dataset; month: string | null }) {
+const Ksl5bDetail = React.memo(function Ksl5bDetail({ ds, month }: { ds: Dataset; month: string | null }) {
   // Filter PCms rows by selected month
   const scopedByMonth = useMemo(() => {
     if (!month) return ds.pcms;
@@ -1556,7 +1557,7 @@ function Ksl5bDetail({ ds, month }: { ds: Dataset; month: string | null }) {
       </Panel>
     </>
   );
-}
+});
 
 
 function AgentTip({ active, payload }: any) {

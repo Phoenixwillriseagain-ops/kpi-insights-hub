@@ -1,40 +1,53 @@
-## Why the dashboard freezes
+## Why tab clicks feel laggy
 
-Your SLA workbook is ~15 MB → likely 50–150k rows spread across ~10 KPI sheets. Two compounding problems hit the browser the moment Overview renders:
+Radix `Tabs` unmounts the inactive tab and remounts the new one. Each section (Overview, Trends, Queues, PCms, Quality) mounts **~10+ Recharts `ResponsiveContainer` trees in the same task** as the click handler, so the `mousedown` blocks for ~200 ms while React + Recharts walk every chart, measure SVGs, and run their internal `ResizeObserver` setup.
 
-1. **Every KpiTile recomputes from raw rows on every render.** `KpiTile` calls `overallByKpi`, `rawOverallByKpi`, `exclusionImpact`-style filters and only memoizes the sparkline. With ~10 tiles, each scanning thousands of rows plus rebuilding the exclusion `Set` per call (`exclSet` is not cached), every state change re-scans the whole dataset N×3 times.
-2. **`buildDataset` runs synchronously on the click** with no yield — the toast fires, the heavy Overview mounts in the same task, and the tab/Recharts mount layers on top. The tab bar then appears unresponsive even though the work eventually finishes.
+The compute layer is already cached (previous turn) — this is purely render cost on tab change.
 
-Nothing is broken in the data layer; it's pure CPU pressure from un-cached scans.
+## Fix: defer chart mounting one frame after the tab opens
 
-## Fix
+Add a single tiny utility and apply it where the cost actually lives. No layout or visual changes.
 
-### 1. Per-dataset cache layer in `src/lib/analyzer/compute.ts`
-Add a module-level `WeakMap<Dataset, …>` cache so heavy structures are built once per uploaded dataset:
+### 1. `src/components/DeferredMount.tsx` (new)
 
-- `exclSet(ds, code)` → cache the `Set` per (ds, code).
-- New `groupedByMonth(ds, code)`, `groupedByWeek(ds, code)`, `groupedByQueue(ds, code, month)` returning the post-exclusion row buckets.
-- `monthlySummary`, `weeklySummary`, `weeklyQueueSummary`, `queueBreakdown`, `overallByKpi`, `rawOverallByKpi`, `exclusionImpact` all re-implemented on top of these caches — same return shapes, no API change for callers.
+```tsx
+export function DeferredMount({ children, fallback }: { children: React.ReactNode; fallback?: React.ReactNode }) {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setReady(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+  return <>{ready ? children : (fallback ?? <div className="h-[240px] animate-pulse rounded bg-secondary/30" />)}</>;
+}
+```
 
-Result: opening Overview becomes O(detected KPIs) lookups instead of O(KPIs × rows × 3 scans).
+Effect: the tab swap commits instantly with placeholders; charts paint on the next frame, so the click handler returns in <50 ms.
 
-### 2. Lighter `KpiTile` in `src/routes/index.tsx`
-Wrap `KpiTile` in `React.memo` and collapse its three calls into a single `useMemo([ds, code, month])` that returns `{ before, after, trend, delta, excludedCount }`. Same UI, single pass.
+### 2. Wrap chart bodies inside `Panel` children (one section at a time)
 
-### 3. Unblock the main thread during `runAnalysis`
-In `runAnalysis` (index route):
-- Show the busy spinner immediately, then `await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)))` before `buildReport` and again before `buildDataset` so the spinner paints.
-- Wrap `buildDataset` in a `try/catch` that surfaces a toast on failure (today an exception silently flips `busy` off without telling the user).
-- Add a lightweight "Preparing dashboard…" full-screen overlay between `setDataset(ds)` and the first Overview paint, dismissed on the next animation frame — this hides the one-time Recharts mount cost so the UI never appears "frozen".
+Touch only `src/routes/index.tsx`. In each of `MonthlySection`, `WeeklySection`, `QueuesSection`, `PcmsSection`, `QualityReopenSection`, wrap the `<ResponsiveContainer>…</ResponsiveContainer>` block (and the companion `WeeklyTable` where it sits next to a chart) with `<DeferredMount>`. The surrounding `Panel` header, export menu, and selectors render immediately so the UI feels live.
 
-### 4. No changes to
-Parsers, validation, KPI definitions, file flow, exports, KSL‑5b / Quality / Queue / PCms section logic — they already call through the compute helpers and will pick up the speedup automatically.
+KPI tiles in Overview stay as-is — their sparklines are cheap; the real cost is the big chart panels.
+
+### 3. Memoize section roots
+
+Wrap `MonthlySection`, `WeeklySection`, `QueuesSection`, `PcmsSection`, `QualityReopenSection` in `React.memo`. Props (`ds`, `detected`, `month`) are stable references between tab switches, so the second visit to a tab will skip re-rendering subtrees that didn't change.
+
+### 4. Keep tab unmounting (don't `forceMount`)
+
+`forceMount`-ing all tabs would mount every chart on first dashboard render and make the *initial* load worse — the current symptom would just move from "tab click slow" to "first paint after upload slow". The deferred-mount approach keeps memory low and spreads work across frames.
+
+## Out of scope
+- No compute changes (cache layer from previous turn already covers it).
+- No styling, layout, or export behavior changes.
+- No Recharts replacement.
 
 ## Verification
-- Reload preview, upload your 15 MB SLA + PCms + Exclusions, click Run.
-- Expect: spinner visible during parse, Overview paints in <1 s, tabs switch instantly, KPI tile interactions stay snappy.
-- Sanity check numbers on Overview match the current values for a known KPI to confirm no behavior regression.
+1. Upload the 15 MB SLA + PCms + Exclusions.
+2. Click each top tab in turn — expect the active tab content to swap immediately with a brief skeleton, then charts to render within ~1 frame.
+3. Console should no longer show `mousedown` violations on tab switch (a one-off `requestAnimationFrame` warning is fine and expected).
+4. Confirm numbers and exports still match.
 
 ## Files touched
-- `src/lib/analyzer/compute.ts` — add cache layer, refactor existing exports.
-- `src/routes/index.tsx` — `React.memo` + consolidated `useMemo` for `KpiTile`; `runAnalysis` yield + overlay.
+- `src/components/DeferredMount.tsx` (new, ~12 lines)
+- `src/routes/index.tsx` (wrap chart bodies; `React.memo` five section components)
