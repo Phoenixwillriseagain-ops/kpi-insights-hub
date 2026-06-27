@@ -130,6 +130,9 @@ function Dashboard() {
           onRun={runAnalysis}
           canRun={canRun}
           busy={busy}
+          report={report}
+          override={override}
+          setOverride={setOverride}
         />
       ) : (
         <Analysis
