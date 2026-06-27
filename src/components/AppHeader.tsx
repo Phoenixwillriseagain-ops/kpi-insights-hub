@@ -1,8 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useData } from "@/context/DataContext";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 const nav = [
@@ -13,7 +11,7 @@ const nav = [
 ];
 
 export function AppHeader() {
-  const { main, mainName, exclusion, exclusionName, view, setView, clear } = useData();
+  const { workbook, clear } = useData();
   const path = useRouterState({ select: (s) => s.location.pathname });
 
   return (
@@ -40,36 +38,17 @@ export function AppHeader() {
           })}
         </nav>
         <div className="ml-auto flex flex-wrap items-center gap-4">
-          {main && (
-            <div className="hidden text-xs text-muted-foreground sm:block">
-              <span className="font-medium text-foreground">Main:</span> {mainName} · {main.rows.length.toLocaleString()} rows
-              {exclusion && (
-                <>
-                  <span className="mx-2">|</span>
-                  <span className="font-medium text-foreground">Excl:</span> {exclusionName}
-                </>
-              )}
-            </div>
-          )}
-          {exclusion && (
-            <div className="flex items-center gap-2">
-              <Label htmlFor="view-toggle" className="text-xs text-muted-foreground">
-                Before
-              </Label>
-              <Switch
-                id="view-toggle"
-                checked={view === "after"}
-                onCheckedChange={(c) => setView(c ? "after" : "before")}
-              />
-              <Label htmlFor="view-toggle" className="text-xs text-muted-foreground">
-                After excl.
-              </Label>
-            </div>
-          )}
-          {(main || exclusion) && (
-            <Button size="sm" variant="ghost" onClick={clear}>
-              Clear
-            </Button>
+          {workbook && (
+            <>
+              <div className="hidden text-xs text-muted-foreground sm:block">
+                <span className="font-medium text-foreground">{workbook.fileName}</span>
+                {" · "}
+                {workbook.records.length.toLocaleString()} rows · {workbook.kpisFound.length} KPIs · {workbook.weeks.length} weeks
+              </div>
+              <Button size="sm" variant="ghost" onClick={clear}>
+                Re-upload
+              </Button>
+            </>
           )}
         </div>
       </div>

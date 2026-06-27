@@ -1,14 +1,16 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { z } from "zod";
-import { zodValidator } from "@tanstack/zod-adapter";
+import { zodValidator, fallback } from "@tanstack/zod-adapter";
 import { useData } from "@/context/DataContext";
-import { trendByKpi } from "@/lib/aggregate";
-import { KPIS, LOWER_IS_BETTER, statusFor } from "@/lib/kpiConfig";
+import { kpiTrend } from "@/lib/aggregate";
+import { KPIS, statusFor, formatPct, isLowerBetter } from "@/lib/kpiConfig";
 import { cn } from "@/lib/utils";
-import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-const searchSchema = z.object({ kpi: z.string().optional() });
+const searchSchema = z.object({
+  kpi: fallback(z.string(), "KSL-2c").default("KSL-2c"),
+});
 
 export const Route = createFileRoute("/trend")({
   ssr: false,
@@ -16,30 +18,24 @@ export const Route = createFileRoute("/trend")({
   head: () => ({
     meta: [
       { title: "6-Week Trend · KPI Dashboard" },
-      { name: "description", content: "Last 6 ISO weeks of KPI compliance with target reference line." },
+      { name: "description", content: "Last 6 ISO weeks of KPI performance, Before and After exclusion overlaid." },
       { property: "og:title", content: "KPI 6-Week Trend" },
-      { property: "og:description", content: "Weekly KPI compliance trend over the last 6 weeks." },
+      { property: "og:description", content: "Weekly KPI trend with Before/After exclusion lines and target reference." },
     ],
   }),
   component: TrendPage,
 });
 
 function TrendPage() {
-  const { active } = useData();
+  const { workbook } = useData();
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
-  const kpiCode = search.kpi ?? "KSL-2c";
-  const kpi = KPIS.find((k) => k.code === kpiCode) ?? KPIS[0];
-  const isLower = LOWER_IS_BETTER.has(kpi.code);
+  const kpi = KPIS.find((k) => k.code === search.kpi) ?? KPIS[0];
+  const lower = isLowerBetter(kpi);
 
-  const data = useMemo(() => (active ? trendByKpi(active, kpi, 6) : []), [active, kpi]);
-  const latest = data[data.length - 1];
-  const totals = data.reduce(
-    (acc, d) => ({ tickets: acc.tickets + d.tickets, breaches: acc.breaches + d.breaches }),
-    { tickets: 0, breaches: 0 },
-  );
+  const data = useMemo(() => (workbook ? kpiTrend(workbook, kpi.code, 6) : []), [workbook, kpi]);
 
-  if (!active) {
+  if (!workbook) {
     return (
       <main className="mx-auto max-w-5xl px-6 py-16 text-center">
         <p className="text-sm text-muted-foreground">No data yet — <Link to="/" className="text-primary underline">upload a file</Link>.</p>
@@ -49,16 +45,21 @@ function TrendPage() {
 
   const chartData = data.map((d) => ({
     week: d.weekLabel,
-    value: d.tickets === 0 ? null : Math.round(d.rate * 1000) / 10,
-    target: kpi.target * 100,
+    before: d.before.total === 0 ? null : Math.round(d.before.pct * 1000) / 10,
+    after: d.after.total === 0 ? null : Math.round(d.after.pct * 1000) / 10,
   }));
+
+  const targetPct = kpi.target * 100;
+  const yDomain: [number, number] = lower
+    ? [0, Math.max(targetPct + 10, 20)]
+    : [Math.max(0, targetPct - 15), 100];
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">6-Week Trend</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{kpi.measures} · {kpi.targetText}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{kpi.measures} · target {kpi.targetText}</p>
         </div>
         <select
           value={kpi.code}
@@ -72,28 +73,27 @@ function TrendPage() {
       </div>
 
       <section className="mt-6 rounded-2xl border border-border bg-card p-5">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <div className="text-xs text-muted-foreground">
-            Latest: <span className="font-semibold text-foreground">{!latest || latest.tickets === 0 ? "—" : `${(latest.rate * 100).toFixed(1)}%`}</span>
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {totals.tickets.toLocaleString()} tickets · {totals.breaches.toLocaleString()} breaches
-          </div>
-        </div>
-        <div className="mt-4 h-80 w-full">
+        <div className="h-80 w-full">
           <ResponsiveContainer>
             <LineChart data={chartData} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="week" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
               <YAxis
-                domain={isLower ? [0, 100] : [Math.max(0, kpi.target * 100 - 15), 100]}
+                domain={yDomain}
                 tick={{ fontSize: 12 }}
                 stroke="hsl(var(--muted-foreground))"
                 tickFormatter={(v) => `${v}%`}
               />
-              <Tooltip formatter={(v: any) => (v == null ? "—" : `${v}%`)} />
-              <ReferenceLine y={kpi.target * 100} stroke="#94a3b8" strokeDasharray="6 4" label={{ value: `${(kpi.target * 100).toFixed(0)}`, position: "right", fontSize: 11 }} />
-              <Line type="monotone" dataKey="value" stroke="#0d9488" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls />
+              <Tooltip formatter={(v) => (v == null ? "—" : `${v}%`)} />
+              <Legend />
+              <ReferenceLine
+                y={targetPct}
+                stroke="#94a3b8"
+                strokeDasharray="6 4"
+                label={{ value: `Target ${targetPct.toFixed(0)}%`, position: "right", fontSize: 11 }}
+              />
+              <Line type="monotone" name="Before exclusion" dataKey="before" stroke="#94a3b8" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+              <Line type="monotone" name="After exclusion" dataKey="after" stroke="#0d9488" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -101,24 +101,34 @@ function TrendPage() {
 
       <section className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {data.map((d) => {
-          const status = statusFor(kpi, d.rate);
+          const status = statusFor(kpi, d.after.pct);
           const styles = {
             good: "border-emerald-200 bg-emerald-50",
             watch: "border-amber-200 bg-amber-50",
             risk: "border-rose-200 bg-rose-50",
           }[status];
           return (
-            <div key={d.weekKey} className={cn("rounded-xl border p-4", styles)}>
+            <div key={d.weekKey} className={cn("rounded-xl border p-3", styles)}>
               <div className="text-xs text-muted-foreground">{d.weekLabel}</div>
-              <div className="mt-1 text-2xl font-semibold tabular-nums">
-                {d.tickets === 0 ? "—" : `${(d.rate * 100).toFixed(1)}%`}
+              <div className="mt-1 flex items-baseline justify-between gap-2 text-[11px] text-muted-foreground">
+                <span>Before</span>
+                <span className="tabular-nums">{d.before.total === 0 ? "—" : formatPct(d.before.pct)}</span>
               </div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                {d.tickets.toLocaleString()} tickets · {d.breaches.toLocaleString()} breaches
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-[11px] text-muted-foreground">After</span>
+                <span className="text-base font-semibold tabular-nums">{d.after.total === 0 ? "—" : formatPct(d.after.pct)}</span>
+              </div>
+              <div className="mt-1 text-[10px] text-muted-foreground tabular-nums">
+                breaches {d.before.breach}/{d.after.breach} · total {d.before.total}/{d.after.total}
               </div>
             </div>
           );
         })}
+        {data.length === 0 && (
+          <div className="col-span-full rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+            No rows for {kpi.code} in this workbook.
+          </div>
+        )}
       </section>
     </main>
   );

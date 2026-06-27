@@ -1,42 +1,73 @@
-## Goal
+# Plan — adapt dashboard to the real V2 workbook
 
-An interactive KPI dashboard that runs entirely in the browser. You upload two Excel files each session (main SLA file + exclusion file); nothing is stored server-side. Deployable as a static site to GitHub Pages.
+The previously-built scaffolding (routes, KPI cards, charts, GitHub Pages workflow) stays. The parser, aggregation, exclusion model and UI surfaces that depend on them get rewritten to match the actual file format you uploaded.
 
-## Pages / Views
+## File model (confirmed)
 
-1. **Upload** (landing) — drop zones for Main SLA file and Exclusion file. Both parsed in-browser, kept in memory only. Sticky header shows file names + "Clear" button. An "Include exclusion data" toggle appears once the exclusion file is loaded.
-2. **Overview** — grid of KPI cards (KSL-1, KSL-2a..d, KSL-3a, KSL-4, KSL-5a, KSL-5b, KSL-6, KM-1, KM-2) matching screenshot 2: code, % value, tickets · breaches, label, status color (Good ≥ target, Watch within band, Risk below). Below: "All KPIs at a Glance" table (KPI, what it measures, target, tickets, breaches, rate, status badge).
-3. **6-Week Trend** — for a selected KPI: line chart of last 6 ISO weeks with target reference line, latest value, total tickets + breaches (screenshot 1 layout). Below the chart, one card per week with %, tickets, breaches. KPI selector at top.
-4. **Per-Queue / Market** — table + drill-down. Market derived from `ISO_Language`; queues grouped under their market. Filter chips for market and KPI. Clicking a queue opens a side panel with the same 6-week trend + KPI breakdown for just that queue.
+- One sheet per KPI: `KM-1, KM-2, KSL-1, KSL-2a, KSL-2b, KSL-2c, KSL-2d, KSL-3a, KSL-4, KSL-5a, KSL-5b, KSL-6`.
+- Each sheet row = one ticket evaluated for that KPI. Columns used:
+  `Incident Ticket, DATE_CLOSE, Queue, ISO_Language, SLA_Code, Breach_Description, Excluded, Week`.
+- A row is a **breach** when `Breach_Description` is non-empty; otherwise it counted toward applicable but did not breach.
+- `Excluded` is per-row (`'0'` / `'1'`).
+- ISO week is derived from `DATE_CLOSE`.
 
-Global toggle in the header: **Before exclusion / After exclusion** (only enabled when exclusion file is uploaded). Switches all values across all pages.
+## KPI formulas
 
-## Data Flow
+- KSL family: `SLA% = (total − breaches) / total`
+- KM family:  `KPI% = breaches / total`
+- Targets/thresholds keep the existing `kpiConfig.ts` table.
 
-- Parsing: `xlsx` library (SheetJS) in the browser. No server calls.
-- Expected columns in the main file (based on your description): `Queue`, `ISO_Language`, a ticket/breach indicator per KPI, and a date or ISO-week column. **Exact column names confirmed against the uploaded file in build mode** — the parser will be column-name driven so adjustments are one config change.
-- Week bucketing: ISO week (`Wxx 'yy`), last 6 weeks ending at the latest week present in the data.
-- KPI registry (code, label, target %, target band) defined in a single config file so targets/labels can be tweaked without touching UI code.
-- Exclusion file: same shape as main; the toggle swaps the active dataset in a React context. No "compare" view in v1 — just a clean toggle, as you chose.
-- All computation memoised; recompute on file change or toggle change.
+## Exclusion model — side-by-side
 
-## Tech & Hosting
+No global toggle. Every metric is computed twice in one pass:
 
-- TanStack Start with `ssr: false` on data routes (pure client) so it builds to a fully static bundle.
-- Vite static build → published to the `gh-pages` branch via a GitHub Action (`actions/deploy-pages`). README will document: connect repo to Lovable, push, enable Pages → "GitHub Actions" source.
-- No backend, no Lovable Cloud, no auth. Files never leave the browser tab.
-- Charts: Recharts (already common in shadcn stack). Tables: shadcn `Table`. Styling matches your screenshots — soft green/red status cards, teal trend line, dashed target line.
+- **Before exclusion**: all rows in the sheet.
+- **After exclusion**: rows where `Excluded != '1'`.
 
-## Technical Notes
+Both numbers are shown together everywhere (cards, table cells, chart series).
 
-- `src/lib/parseWorkbook.ts` — reads File → normalized rows `{ queue, market, isoWeek, kpi, tickets, breaches }`.
-- `src/lib/kpiConfig.ts` — KPI list with targets/bands.
-- `src/lib/aggregate.ts` — pure functions: `overallByKpi`, `trendByKpi(weeks=6)`, `byQueue`, `byMarket`.
-- `src/context/DataContext.tsx` — holds main + exclusion datasets and the active-view toggle.
-- Routes: `/` (upload), `/overview`, `/trend`, `/queues`.
-- `.github/workflows/deploy.yml` — build + deploy to Pages on push to `main`.
+## Files to change
 
-## Open Items (resolved in build mode)
+1. `src/lib/parseWorkbook.ts` — full rewrite.
+   - Iterate every sheet whose name matches a KPI code.
+   - For each row produce: `{ kpiCode, ticket, queue, market: ISO_Language, weekKey, weekLabel, excluded: boolean, breach: boolean }`.
+   - Output `ParsedWorkbook { records, weeks, weekLabels, markets, queues, kpisFound[] }`.
 
-- Upload the main SLA file once we start building so the parser maps to the real column names and KPI metric columns.
-- Confirm exact mapping from `ISO_Language` value → market label (or use the raw ISO code as the market name).
+2. `src/lib/aggregate.ts` — rewrite around `records`.
+   - `aggregateKpi(records, kpiCode, { weekKey?, queue?, market? }) → { before: {total, breach, pct}, after: {…} }`.
+   - `kpiTrend(records, kpiCode, lastNWeeks=6) → Array<{ weekLabel, beforePct, afterPct, beforeBreach, afterBreach, total }>`.
+   - `marketBreakdown(records, kpiCode) → per ISO_Language rollup (before & after)`.
+   - `queueBreakdown(records, kpiCode, market) → per Queue rollup (before & after)`.
+
+3. `src/lib/kpiConfig.ts` — add `family: "KSL" | "KM"` and a `direction` (higher-better for KSL, lower-better for KM) so status colors flip correctly for KM.
+
+4. `src/context/DataContext.tsx` — drop the global exclusion toggle; expose `records` + helpers. Keep single-workbook upload (no second exclusion file).
+
+5. `src/components/AppHeader.tsx` — remove the Before/After switch; show parsed-file name + a re-upload button.
+
+6. `src/components/KpiCard.tsx` — show two stacked figures: `Before  XX.X%` and `After  XX.X%` with a small delta, plus breach count `(b / total)` underneath. Status pill driven by the After value vs target.
+
+7. `src/routes/index.tsx` — upload card with detection summary (sheets found, weeks detected, ticket count, markets list).
+
+8. `src/routes/overview.tsx` — KPI grid (all 12 KPIs) using the new cards; summary table columns: `KPI | Target | Before % | After % | Breaches B/A | Total | Status`.
+
+9. `src/routes/trend.tsx` — for each KPI render a Recharts `LineChart` with two lines (Before, After) over the last 6 ISO weeks of `DATE_CLOSE`, dashed target reference line. Week selector defaults to last 6.
+
+10. `src/routes/queues.tsx` — Market filter (ISO_Language) → table of queues with Before/After % per KPI; clicking a queue opens a Sheet showing its 6-week Before/After trend for the selected KPI.
+
+11. `README.md` — update file-format section (sheet-per-KPI, no second file, Excluded column drives the After view).
+
+GitHub Actions workflow at `.github/workflows/deploy.yml` is unchanged.
+
+## Technical notes
+
+- Parsing stays 100% client-side with `xlsx` (SheetJS) — no data ever leaves the browser, matching the "GitHub Pages, stateless" requirement.
+- ISO week key format `YYYY-Www` (sortable) with display label `Wxx 'yy`.
+- "Breach" detection: `Breach_Description` trimmed string length > 0. (`SLA_N`/`SLA_Code` available for tooltips but not for the boolean.)
+- KM cards/trends invert the status palette (higher % is worse).
+- Empty-state guards on every route when no workbook is loaded.
+
+## Out of scope
+
+- Persisting uploads, multi-file merge, auth, server-side processing.
+- A separate exclusion file (your data already carries `Excluded` per row).
