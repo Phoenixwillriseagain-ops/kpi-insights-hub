@@ -1,4 +1,5 @@
 name: Deploy to GitHub Pages
+
 on:
   push:
     branches: [main]
@@ -19,15 +20,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
-      - name: Install dependencies
-        run: bun install
+      - run: bun install --frozen-lockfile
       - name: Build
+        env:
+          # Nitro will prerender all routes (they are all ssr:false) and emit static files
+          NITRO_PRESET: static
         run: bun run build
-      - name: SPA fallback
-        run: cp dist/index.html dist/404.html
+      - name: Prepare static output
+        run: |
+          # Nitro's static preset emits prerendered HTML to .output/public
+          OUT=.output/public
+          if [ ! -d "$OUT" ]; then
+            echo "Expected $OUT — adjust this step to match your build output." && exit 1
+          fi
+          # SPA fallback for client-side routing on GitHub Pages
+          cp "$OUT/index.html" "$OUT/404.html" || true
+          touch "$OUT/.nojekyll"
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: .output/public
 
   deploy:
     needs: build
@@ -36,6 +47,5 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
+      - id: deployment
         uses: actions/deploy-pages@v4
