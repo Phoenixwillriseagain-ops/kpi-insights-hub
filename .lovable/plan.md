@@ -1,44 +1,40 @@
-## Goal
+## Why the dashboard freezes
 
-Get GitHub Pages deploying successfully. The current `bun run build` runs TanStack Start's Nitro SSR pipeline, which fails with `rollupOptions.input should not be an html file when building for SSR`. Pages can only host static files anyway, so we add a parallel SPA-only build path used exclusively by the Pages workflow. Local dev and the Lovable preview keep using the TanStack Start pipeline unchanged.
+Your SLA workbook is ~15 MB → likely 50–150k rows spread across ~10 KPI sheets. Two compounding problems hit the browser the moment Overview renders:
 
-The app's UI, components, styles, routes, and behavior do not change. Only the build/output for the Pages deploy changes.
+1. **Every KpiTile recomputes from raw rows on every render.** `KpiTile` calls `overallByKpi`, `rawOverallByKpi`, `exclusionImpact`-style filters and only memoizes the sparkline. With ~10 tiles, each scanning thousands of rows plus rebuilding the exclusion `Set` per call (`exclSet` is not cached), every state change re-scans the whole dataset N×3 times.
+2. **`buildDataset` runs synchronously on the click** with no yield — the toast fires, the heavy Overview mounts in the same task, and the tab/Recharts mount layers on top. The tab bar then appears unresponsive even though the work eventually finishes.
 
-## What we add
+Nothing is broken in the data layer; it's pure CPU pressure from un-cached scans.
 
-1. **`index.html`** at the project root — a minimal SPA shell that mounts `src/main.tsx`. Used only by the SPA build.
-2. **`src/main.tsx`** — client entry that creates the router (reusing the existing `src/router.tsx`) with browser history and calls `RouterProvider`. Imports `src/styles.css`.
-3. **`vite.config.pages.ts`** — a standalone Vite config (no `@lovable.dev/vite-tanstack-config`, no Nitro, no TanStack Start plugin's SSR wiring). It uses:
-   - `@tanstack/router-plugin/vite` to generate `routeTree.gen.ts` from `src/routes/`
-   - `@vitejs/plugin-react`
-   - Tailwind v4 via `@tailwindcss/vite`
-   - `base: process.env.VITE_BASE || '/'`
-   - `build.outDir: 'dist'`
-4. **`.github/workflows/deploy.yml`** — update the build step to run `bunx vite build --config vite.config.pages.ts` and upload `dist/` (with `404.html` SPA fallback + `.nojekyll`) instead of `.output/public`.
+## Fix
 
-## What we don't touch
+### 1. Per-dataset cache layer in `src/lib/analyzer/compute.ts`
+Add a module-level `WeakMap<Dataset, …>` cache so heavy structures are built once per uploaded dataset:
 
-- `src/routes/**`, `src/components/**`, `src/lib/**`, `src/styles.css` — zero changes.
-- `src/router.tsx`, `src/routes/__root.tsx` — used by both builds.
-- `src/server.ts`, `src/start.ts`, `vite.config.ts` — keep working for local dev and Lovable preview.
-- `package.json` `build` script — unchanged so the Lovable sandbox keeps working.
+- `exclSet(ds, code)` → cache the `Set` per (ds, code).
+- New `groupedByMonth(ds, code)`, `groupedByWeek(ds, code)`, `groupedByQueue(ds, code, month)` returning the post-exclusion row buckets.
+- `monthlySummary`, `weeklySummary`, `weeklyQueueSummary`, `queueBreakdown`, `overallByKpi`, `rawOverallByKpi`, `exclusionImpact` all re-implemented on top of these caches — same return shapes, no API change for callers.
 
-## Constraints this introduces
+Result: opening Overview becomes O(detected KPIs) lookups instead of O(KPIs × rows × 3 scans).
 
-- All loaders/components must remain client-safe (no `createServerFn`, no Node-only imports at module scope). The dashboard is already 100% client-side (SheetJS in the browser, in-memory state), so this matches reality.
-- Any future server-only feature would need to live behind the TanStack Start path and wouldn't appear on the Pages deploy. Acceptable for a stateless dashboard.
+### 2. Lighter `KpiTile` in `src/routes/index.tsx`
+Wrap `KpiTile` in `React.memo` and collapse its three calls into a single `useMemo([ds, code, month])` that returns `{ before, after, trend, delta, excludedCount }`. Same UI, single pass.
 
-## Visual impact
+### 3. Unblock the main thread during `runAnalysis`
+In `runAnalysis` (index route):
+- Show the busy spinner immediately, then `await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)))` before `buildReport` and again before `buildDataset` so the spinner paints.
+- Wrap `buildDataset` in a `try/catch` that surfaces a toast on failure (today an exception silently flips `busy` off without telling the user).
+- Add a lightweight "Preparing dashboard…" full-screen overlay between `setDataset(ds)` and the first Overview paint, dismissed on the next animation frame — this hides the one-time Recharts mount cost so the UI never appears "frozen".
 
-None. Same React tree, same Tailwind styles, same routes. The only user-visible change is that `https://<user>.github.io/kpi-insights-hub/` will start loading the app instead of returning a build failure.
+### 4. No changes to
+Parsers, validation, KPI definitions, file flow, exports, KSL‑5b / Quality / Queue / PCms section logic — they already call through the compute helpers and will pick up the speedup automatically.
 
 ## Verification
+- Reload preview, upload your 15 MB SLA + PCms + Exclusions, click Run.
+- Expect: spinner visible during parse, Overview paints in <1 s, tabs switch instantly, KPI tile interactions stay snappy.
+- Sanity check numbers on Overview match the current values for a known KPI to confirm no behavior regression.
 
-After the change: push to `main`, watch the Actions run go green, open the Pages URL, confirm the dashboard renders, upload a sample file, and confirm a hard refresh on a sub-route (e.g. `/queues`) still works (404.html fallback).
-
-## Files
-
-- add `index.html`
-- add `src/main.tsx`
-- add `vite.config.pages.ts`
-- edit `.github/workflows/deploy.yml`
+## Files touched
+- `src/lib/analyzer/compute.ts` — add cache layer, refactor existing exports.
+- `src/routes/index.tsx` — `React.memo` + consolidated `useMemo` for `KpiTile`; `runAnalysis` yield + overlay.
