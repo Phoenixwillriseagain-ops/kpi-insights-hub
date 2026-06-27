@@ -193,7 +193,7 @@ const SLOT_META: Record<Slot, { title: string; desc: string; required?: boolean;
 };
 
 function UploadHero({
-  files, onAdd, onRemove, onRun, canRun, busy,
+  files, onAdd, onRemove, onRun, canRun, busy, report, override, setOverride,
 }: {
   files: Record<Slot, LoadedFile[]>;
   onAdd: (slot: Slot, list: FileList | File[]) => void;
@@ -201,7 +201,11 @@ function UploadHero({
   onRun: () => void;
   canRun: boolean;
   busy: boolean;
+  report: ValidationReport | null;
+  override: boolean;
+  setOverride: (v: boolean) => void;
 }) {
+  const hasErrors = !!report && !report.ok;
   return (
     <main className="mx-auto max-w-6xl px-6 pt-12 pb-16">
       <section className="mb-12 text-center">
@@ -231,17 +235,24 @@ function UploadHero({
         ))}
       </div>
 
-      <div className="mt-10 flex justify-center">
+      {report && <ValidationPanel report={report} override={override} setOverride={setOverride} />}
+
+      <div className="mt-10 flex flex-col items-center justify-center gap-2">
         <Button
           size="lg"
-          disabled={!canRun || busy}
+          disabled={!canRun || busy || (hasErrors && !override)}
           onClick={onRun}
           className="group h-12 rounded-full bg-[image:var(--gradient-primary)] px-8 text-base font-semibold text-primary-foreground ring-glow transition hover:opacity-95 disabled:opacity-40"
         >
           {busy
             ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Crunching…</>
-            : <><Activity className="mr-2 h-4 w-4" /> Run analysis <ChevronRight className="ml-1 h-4 w-4 transition group-hover:translate-x-0.5" /></>}
+            : <><Activity className="mr-2 h-4 w-4" /> {report ? "Re-run analysis" : "Run analysis"} <ChevronRight className="ml-1 h-4 w-4 transition group-hover:translate-x-0.5" /></>}
         </Button>
+        {hasErrors && (
+          <p className="text-[11px] text-muted-foreground">
+            Fix the validation errors above or enable “Run anyway” to bypass.
+          </p>
+        )}
       </div>
 
       <div className="mt-12 grid grid-cols-1 gap-3 text-xs text-muted-foreground sm:grid-cols-3">
