@@ -54,6 +54,8 @@ function Dashboard() {
   const [activeKpi, setActiveKpi] = useState<KpiCode>("KSL-2c");
   const [busy, setBusy] = useState(false);
   const [dark, setDark] = useState(false);
+  const [report, setReport] = useState<ValidationReport | null>(null);
+  const [override, setOverride] = useState(false);
 
   const toggleTheme = () => {
     setDark((d) => {
@@ -72,10 +74,13 @@ function Dashboard() {
       }),
     );
     setFiles((s) => ({ ...s, [slot]: [...s[slot], ...loaded] }));
+    setReport(null); setOverride(false);
   }, []);
 
-  const removeFile = (slot: Slot, idx: number) =>
+  const removeFile = (slot: Slot, idx: number) => {
     setFiles((s) => ({ ...s, [slot]: s[slot].filter((_, i) => i !== idx) }));
+    setReport(null); setOverride(false);
+  };
 
   const canRun = files.sla.some((f) => !f.error);
 
@@ -83,6 +88,18 @@ function Dashboard() {
     setBusy(true);
     try {
       await new Promise((r) => setTimeout(r, 50));
+      const rep = buildReport(
+        files.sla.filter((f) => f.wb).map((f) => ({ name: f.name, wb: f.wb })),
+        files.breach.filter((f) => f.wb).map((f) => ({ name: f.name, wb: f.wb })),
+        files.excl.filter((f) => f.wb).map((f) => ({ name: f.name, wb: f.wb })),
+      );
+      setReport(rep);
+      if (!rep.ok && !override) {
+        toast.error("Fix required columns before running", {
+          description: "See the validation panel for details, or toggle “Run anyway” to bypass.",
+        });
+        return;
+      }
       const ds = buildDataset(
         files.sla.filter((f) => f.wb).map((f) => f.wb!),
         files.breach.filter((f) => f.wb).map((f) => f.wb!),
@@ -98,7 +115,7 @@ function Dashboard() {
     } finally { setBusy(false); }
   };
 
-  const reset = () => { setDataset(null); setFiles({ sla: [], breach: [], excl: [] }); };
+  const reset = () => { setDataset(null); setFiles({ sla: [], breach: [], excl: [] }); setReport(null); setOverride(false); };
 
   return (
     <div className="min-h-screen">
