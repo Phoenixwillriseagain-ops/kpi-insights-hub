@@ -600,7 +600,8 @@ function WeeklySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) {
     <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
       {detected.map((code) => {
         const meta = KPI_META[code];
-        const data = weeklySummary(ds, code).map((p) => ({ ...p, label: weekLabel(p.label) }));
+        const data = withDeltas(weeklySummary(ds, code).map((p) => ({ ...p, label: weekLabel(p.label) })));
+        const amber = amberBound(meta);
         const dotColor = (rag: string) =>
           rag === "green" ? "var(--success)"
           : rag === "amber" ? "var(--warning)"
@@ -611,13 +612,26 @@ function WeeklySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) {
             {data.length === 0
               ? <Empty message="No weekly data for this KPI." />
               : (
-                <ResponsiveContainer width="100%" height={260}>
-                  <LineChart data={data} margin={{ top: 24, right: 24, left: 0, bottom: 8 }}>
+                <ResponsiveContainer width="100%" height={280}>
+                  <LineChart data={data} margin={{ top: 32, right: 28, left: 0, bottom: 8 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                     <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
                     <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} domain={["auto", "auto"]} />
-                    <Tooltip content={<ChartTip suffix="%" />} />
-                    <ReferenceLine y={meta.target} stroke="var(--muted-foreground)" strokeDasharray="4 4" label={{ value: `target ${meta.targetLabel}`, fontSize: 10, fill: "var(--muted-foreground)", position: "right" }} />
+                    <Tooltip content={<RichTip meta={meta} />} cursor={{ stroke: "var(--border)", strokeDasharray: "3 3" }} />
+                    <ReferenceLine
+                      y={meta.target}
+                      stroke="var(--success)"
+                      strokeDasharray="5 4"
+                      ifOverflow="extendDomain"
+                      label={{ value: `target ${meta.targetLabel}`, fontSize: 10, fill: "var(--success)", position: "insideTopRight" }}
+                    />
+                    <ReferenceLine
+                      y={amber}
+                      stroke="var(--warning)"
+                      strokeDasharray="2 4"
+                      ifOverflow="extendDomain"
+                      label={{ value: meta.isKM ? "watch ceiling" : "watch floor", fontSize: 10, fill: "var(--warning)", position: "insideBottomRight" }}
+                    />
                     <Line
                       type="monotone"
                       dataKey="rate"
@@ -628,14 +642,36 @@ function WeeklySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) {
                         const { cx, cy, payload, index } = props;
                         return <circle key={index} cx={cx} cy={cy} r={5} fill={dotColor(payload.rag)} stroke={meta.color} strokeWidth={1.5} />;
                       }}
-                      activeDot={{ r: 6 }}
+                      activeDot={{ r: 7 }}
                     >
                       <LabelList
                         dataKey="rate"
                         position="top"
-                        offset={10}
-                        formatter={(v: number) => `${v.toFixed(1)}%`}
-                        style={{ fill: "var(--foreground)", fontSize: 11, fontWeight: 600 }}
+                        offset={12}
+                        content={(props: any) => {
+                          const { x, y, value, index } = props;
+                          const row = data[index];
+                          if (row == null || value == null) return null;
+                          const delta = row.delta;
+                          const arrow = delta == null ? "" : delta > 0.05 ? " ▲" : delta < -0.05 ? " ▼" : " ■";
+                          const deltaColor = delta == null
+                            ? "var(--muted-foreground)"
+                            : (meta.isKM ? delta < 0 : delta > 0)
+                              ? "var(--success)"
+                              : delta === 0 ? "var(--muted-foreground)" : "var(--danger)";
+                          return (
+                            <g>
+                              <text x={x} y={y} dy={-6} textAnchor="middle" style={{ fontSize: 11, fontWeight: 600, fill: "var(--foreground)" }}>
+                                {Number(value).toFixed(1)}%
+                              </text>
+                              {delta != null && (
+                                <text x={x} y={y} dy={6} textAnchor="middle" style={{ fontSize: 9, fontWeight: 600, fill: deltaColor }}>
+                                  {(delta > 0 ? "+" : "") + delta.toFixed(1) + "pp" + arrow}
+                                </text>
+                              )}
+                            </g>
+                          );
+                        }}
                       />
                     </Line>
                   </LineChart>
