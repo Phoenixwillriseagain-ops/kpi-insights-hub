@@ -271,36 +271,55 @@ function UploadCard({ slot, files, onAdd, onRemove }: {
       <div
         role="button"
         tabIndex={0}
+        aria-label={`Upload ${meta.title} workbook. Drop an Excel file or press Enter to browse.`}
+        aria-describedby={`drop-help-${slot}`}
         onClick={() => ref.current?.click()}
-        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && ref.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            ref.current?.click();
+          }
+        }}
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
         onDragLeave={() => setDrag(false)}
         onDrop={(e) => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files.length) onAdd(e.dataTransfer.files); }}
         className={cn(
-          "mt-4 cursor-pointer rounded-2xl border-2 border-dashed p-6 text-center transition",
+          "mt-4 cursor-pointer rounded-2xl border-2 border-dashed p-6 text-center transition outline-none",
+          "focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/40",
           drag ? "border-primary bg-primary/5" : "border-border/60 hover:border-primary/60 hover:bg-secondary/40",
         )}
       >
-        <Upload className="mx-auto mb-2 h-5 w-5 text-muted-foreground" />
+        <Upload className="mx-auto mb-2 h-5 w-5 text-muted-foreground" aria-hidden="true" />
         <p className="text-sm font-semibold">Drop .xlsx here</p>
-        <p className="text-[11px] text-muted-foreground">or click to browse</p>
+        <p id={`drop-help-${slot}`} className="text-[11px] text-muted-foreground">or click to browse</p>
         <input
-          ref={ref} type="file" accept=".xlsx,.xls" multiple className="hidden"
+          ref={ref}
+          type="file"
+          accept=".xlsx,.xls"
+          multiple
+          className="sr-only"
+          aria-label={`${meta.title} file input`}
+          tabIndex={-1}
           onChange={(e) => { if (e.target.files?.length) { onAdd(e.target.files); e.currentTarget.value = ""; } }}
         />
       </div>
 
       {files.length > 0 && (
-        <ul className="mt-3 space-y-1.5">
+        <ul className="mt-3 space-y-1.5" aria-label={`Uploaded ${meta.title} files`}>
           {files.map((f, i) => (
             <li key={i} className={cn(
               "flex items-center gap-2 rounded-lg border border-border/60 bg-background/40 px-2.5 py-1.5 text-xs",
               f.error && "border-destructive/40 bg-destructive/5",
             )}>
-              <span className={cn("font-semibold", f.error ? "text-destructive" : "text-[color:var(--success)]")}>{f.error ? "!" : "✓"}</span>
+              <span aria-hidden="true" className={cn("font-semibold", f.error ? "text-destructive" : "text-[color:var(--success)]")}>{f.error ? "!" : "✓"}</span>
+              <span className="sr-only">{f.error ? `Error: ${f.error}` : "Loaded"}</span>
               <span className="flex-1 truncate" title={f.name}>{f.name}</span>
-              <button onClick={() => onRemove(i)} aria-label="Remove" className="text-muted-foreground hover:text-destructive">
-                <X className="h-3.5 w-3.5" />
+              <button
+                onClick={() => onRemove(i)}
+                aria-label={`Remove ${f.name}`}
+                className="rounded text-muted-foreground transition hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             </li>
           ))}
@@ -329,11 +348,15 @@ function Analysis({
   return (
     <main className="mx-auto max-w-7xl px-6 py-8">
       {/* Period chips */}
-      <div className="mb-6 flex flex-wrap items-center gap-2">
+      <div
+        className="mb-6 flex flex-wrap items-center gap-2"
+        role="group"
+        aria-label="Filter by period"
+      >
         <span className="mr-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Period</span>
-        <Chip active={month === null} onClick={() => setMonth(null)}>All months</Chip>
+        <Chip active={month === null} onClick={() => setMonth(null)} label="All months">All months</Chip>
         {ds.months.map((m) => (
-          <Chip key={m} active={month === m} onClick={() => setMonth(m)}>{monthLabel(m)}</Chip>
+          <Chip key={m} active={month === m} onClick={() => setMonth(m)} label={monthLabel(m)}>{monthLabel(m)}</Chip>
         ))}
       </div>
 
@@ -366,12 +389,16 @@ function Analysis({
   );
 }
 
-function Chip({ children, active, onClick }: { children: React.ReactNode; active: boolean; onClick: () => void }) {
+function Chip({ children, active, onClick, label }: { children: React.ReactNode; active: boolean; onClick: () => void; label?: string }) {
   return (
     <button
+      type="button"
       onClick={onClick}
+      aria-pressed={active}
+      aria-label={label}
       className={cn(
-        "rounded-full border px-3 py-1 text-xs font-medium transition",
+        "rounded-full border px-3 py-1 text-xs font-medium transition outline-none",
+        "focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         active
           ? "border-transparent bg-[image:var(--gradient-primary)] text-primary-foreground ring-glow"
           : "border-border/70 bg-card/60 text-foreground hover:border-primary/60 hover:text-primary",
@@ -521,20 +548,41 @@ function MonthlySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) 
     <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
       {detected.map((code) => {
         const meta = KPI_META[code];
-        const data = monthlySummary(ds, code).map((p) => ({ ...p, label: monthLabel(p.label) }));
+        const data = withDeltas(monthlySummary(ds, code).map((p) => ({ ...p, label: monthLabel(p.label) })));
+        const amber = amberBound(meta);
         return (
           <Panel key={code} title={code} subtitle={meta.what} badge={meta.targetLabel} exportName={`monthly_${code}`}>
             {data.length === 0
               ? <Empty message="No monthly data for this KPI." />
               : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={data} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+                <ResponsiveContainer width="100%" height={240}>
+                  <LineChart data={data} margin={{ top: 18, right: 24, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                     <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
                     <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} />
-                    <Tooltip content={<ChartTip suffix="%" />} />
-                    <ReferenceLine y={meta.target} stroke="var(--muted-foreground)" strokeDasharray="4 4" label={{ value: "target", fontSize: 10, fill: "var(--muted-foreground)", position: "right" }} />
-                    <Line type="monotone" dataKey="rate" stroke={meta.color} strokeWidth={2.5} dot={{ r: 4, fill: meta.color, strokeWidth: 0 }} />
+                    <Tooltip content={<RichTip meta={meta} />} cursor={{ stroke: "var(--border)", strokeDasharray: "3 3" }} />
+                    <ReferenceLine
+                      y={meta.target}
+                      stroke="var(--success)"
+                      strokeDasharray="5 4"
+                      ifOverflow="extendDomain"
+                      label={{ value: `target ${meta.targetLabel}`, fontSize: 10, fill: "var(--success)", position: "insideTopRight" }}
+                    />
+                    <ReferenceLine
+                      y={amber}
+                      stroke="var(--warning)"
+                      strokeDasharray="2 4"
+                      ifOverflow="extendDomain"
+                      label={{ value: meta.isKM ? "watch ceiling" : "watch floor", fontSize: 10, fill: "var(--warning)", position: "insideBottomRight" }}
+                    />
+                    <Line type="monotone" dataKey="rate" stroke={meta.color} strokeWidth={2.5} isAnimationActive={false}
+                      dot={(props: any) => {
+                        const { cx, cy, payload, index } = props;
+                        const c = payload.rag === "green" ? "var(--success)" : payload.rag === "amber" ? "var(--warning)" : payload.rag === "red" ? "var(--danger)" : "var(--muted-foreground)";
+                        return <circle key={index} cx={cx} cy={cy} r={4} fill={c} stroke={meta.color} strokeWidth={1.5} />;
+                      }}
+                      activeDot={{ r: 6 }}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               )}
@@ -552,7 +600,8 @@ function WeeklySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) {
     <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
       {detected.map((code) => {
         const meta = KPI_META[code];
-        const data = weeklySummary(ds, code).map((p) => ({ ...p, label: weekLabel(p.label) }));
+        const data = withDeltas(weeklySummary(ds, code).map((p) => ({ ...p, label: weekLabel(p.label) })));
+        const amber = amberBound(meta);
         const dotColor = (rag: string) =>
           rag === "green" ? "var(--success)"
           : rag === "amber" ? "var(--warning)"
@@ -563,13 +612,26 @@ function WeeklySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) {
             {data.length === 0
               ? <Empty message="No weekly data for this KPI." />
               : (
-                <ResponsiveContainer width="100%" height={260}>
-                  <LineChart data={data} margin={{ top: 24, right: 24, left: 0, bottom: 8 }}>
+                <ResponsiveContainer width="100%" height={280}>
+                  <LineChart data={data} margin={{ top: 32, right: 28, left: 0, bottom: 8 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                     <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
                     <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} domain={["auto", "auto"]} />
-                    <Tooltip content={<ChartTip suffix="%" />} />
-                    <ReferenceLine y={meta.target} stroke="var(--muted-foreground)" strokeDasharray="4 4" label={{ value: `target ${meta.targetLabel}`, fontSize: 10, fill: "var(--muted-foreground)", position: "right" }} />
+                    <Tooltip content={<RichTip meta={meta} />} cursor={{ stroke: "var(--border)", strokeDasharray: "3 3" }} />
+                    <ReferenceLine
+                      y={meta.target}
+                      stroke="var(--success)"
+                      strokeDasharray="5 4"
+                      ifOverflow="extendDomain"
+                      label={{ value: `target ${meta.targetLabel}`, fontSize: 10, fill: "var(--success)", position: "insideTopRight" }}
+                    />
+                    <ReferenceLine
+                      y={amber}
+                      stroke="var(--warning)"
+                      strokeDasharray="2 4"
+                      ifOverflow="extendDomain"
+                      label={{ value: meta.isKM ? "watch ceiling" : "watch floor", fontSize: 10, fill: "var(--warning)", position: "insideBottomRight" }}
+                    />
                     <Line
                       type="monotone"
                       dataKey="rate"
@@ -580,14 +642,36 @@ function WeeklySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) {
                         const { cx, cy, payload, index } = props;
                         return <circle key={index} cx={cx} cy={cy} r={5} fill={dotColor(payload.rag)} stroke={meta.color} strokeWidth={1.5} />;
                       }}
-                      activeDot={{ r: 6 }}
+                      activeDot={{ r: 7 }}
                     >
                       <LabelList
                         dataKey="rate"
                         position="top"
-                        offset={10}
-                        formatter={(v: number) => `${v.toFixed(1)}%`}
-                        style={{ fill: "var(--foreground)", fontSize: 11, fontWeight: 600 }}
+                        offset={12}
+                        content={(props: any) => {
+                          const { x, y, value, index } = props;
+                          const row = data[index];
+                          if (row == null || value == null) return null;
+                          const delta = row.delta;
+                          const arrow = delta == null ? "" : delta > 0.05 ? " ▲" : delta < -0.05 ? " ▼" : " ■";
+                          const deltaColor = delta == null
+                            ? "var(--muted-foreground)"
+                            : (meta.isKM ? delta < 0 : delta > 0)
+                              ? "var(--success)"
+                              : delta === 0 ? "var(--muted-foreground)" : "var(--danger)";
+                          return (
+                            <g>
+                              <text x={x} y={y} dy={-6} textAnchor="middle" style={{ fontSize: 11, fontWeight: 600, fill: "var(--foreground)" }}>
+                                {Number(value).toFixed(1)}%
+                              </text>
+                              {delta != null && (
+                                <text x={x} y={y} dy={6} textAnchor="middle" style={{ fontSize: 9, fontWeight: 600, fill: deltaColor }}>
+                                  {(delta > 0 ? "+" : "") + delta.toFixed(1) + "pp" + arrow}
+                                </text>
+                              )}
+                            </g>
+                          );
+                        }}
                       />
                     </Line>
                   </LineChart>
@@ -636,9 +720,21 @@ function QueuesSection({
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
                 <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${v}%`} />
                 <YAxis type="category" dataKey="queue" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} width={140} />
-                <Tooltip content={<ChartTip suffix="%" />} />
-                <ReferenceLine x={meta.target} stroke="var(--muted-foreground)" strokeDasharray="4 4" />
+                <Tooltip content={<RichTip meta={meta} />} cursor={{ fill: "var(--muted)", opacity: 0.12 }} />
+                <ReferenceLine
+                  x={meta.target}
+                  stroke="var(--success)"
+                  strokeDasharray="5 4"
+                  label={{ value: `target ${meta.targetLabel}`, fontSize: 10, fill: "var(--success)", position: "top" }}
+                />
+                <ReferenceLine
+                  x={amberBound(meta)}
+                  stroke="var(--warning)"
+                  strokeDasharray="2 4"
+                  label={{ value: meta.isKM ? "watch" : "watch", fontSize: 10, fill: "var(--warning)", position: "top" }}
+                />
                 <Bar dataKey="rate" radius={[0, 6, 6, 0]}>
+                  <LabelList dataKey="rate" position="right" formatter={(v: number) => `${v.toFixed(1)}%`} style={{ fill: "var(--foreground)", fontSize: 11, fontWeight: 600 }} />
                   {top.map((d, i) => (
                     <Cell key={i} fill={
                       d.rag === "green" ? "var(--success)"
@@ -780,4 +876,72 @@ function ChartTip({ active, payload, label, suffix = "" }: any) {
       ))}
     </div>
   );
+}
+
+function RichTip({ active, payload, label, meta }: any) {
+  if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload ?? {};
+  const rate: number = Number(row.rate ?? 0);
+  const prev: number | null = row.prev != null ? Number(row.prev) : null;
+  const delta = prev == null ? null : rate - prev;
+  const gap = rate - meta.target;
+  const ragColor =
+    row.rag === "green" ? "var(--success)"
+    : row.rag === "amber" ? "var(--warning)"
+    : row.rag === "red" ? "var(--danger)"
+    : "var(--muted-foreground)";
+  const ragText = ragLabel(row.rag ?? "none", meta.isKM);
+  const gapGood = meta.isKM ? gap <= 0 : gap >= 0;
+  return (
+    <div
+      role="tooltip"
+      className="glass min-w-[180px] rounded-xl border border-border/60 px-3 py-2 text-xs shadow-md"
+    >
+      <div className="mb-1 flex items-center justify-between gap-3">
+        <span className="font-semibold">{label}</span>
+        <span
+          className="rounded-full border px-1.5 py-0.5 text-[9px] font-bold tracking-wide"
+          style={{ color: ragColor, borderColor: ragColor, backgroundColor: `color-mix(in oklab, ${ragColor} 15%, transparent)` }}
+        >
+          {ragText}
+        </span>
+      </div>
+      <p className="tabular-nums">
+        <span className="text-muted-foreground">Rate</span>{" "}
+        <span className="font-semibold" style={{ color: ragColor }}>{rate.toFixed(1)}%</span>
+      </p>
+      <p className="tabular-nums text-muted-foreground">
+        Target {meta.targetLabel} ·{" "}
+        <span style={{ color: gapGood ? "var(--success)" : "var(--danger)" }}>
+          {gap >= 0 ? "+" : ""}{gap.toFixed(1)}pp
+        </span>
+      </p>
+      {delta != null && (
+        <p className="tabular-nums text-muted-foreground">
+          Δ vs prior{" "}
+          <span style={{ color: (meta.isKM ? delta < 0 : delta > 0) ? "var(--success)" : delta === 0 ? "var(--muted-foreground)" : "var(--danger)" }}>
+            {delta > 0 ? "▲" : delta < 0 ? "▼" : "■"} {Math.abs(delta).toFixed(1)}pp
+          </span>
+        </p>
+      )}
+      {row.total != null && (
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          {Number(row.total).toLocaleString()} tickets · {Number(row.breaches ?? 0).toLocaleString()} breaches
+        </p>
+      )}
+    </div>
+  );
+}
+
+// Amber threshold above/below which RAG flips from green→amber, used as a visual zone band.
+function amberBound(meta: { target: number; isKM: boolean }) {
+  return meta.isKM ? meta.target * 1.5 : meta.target - 5;
+}
+
+// Inject prev/delta on each datum so the tooltip can show week-over-week change.
+function withDeltas<T extends { rate: number }>(rows: T[]): (T & { prev: number | null; delta: number | null })[] {
+  return rows.map((r, i) => {
+    const prev = i > 0 ? rows[i - 1].rate : null;
+    return { ...r, prev, delta: prev == null ? null : r.rate - prev };
+  });
 }
