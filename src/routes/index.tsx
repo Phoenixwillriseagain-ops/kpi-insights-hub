@@ -720,9 +720,21 @@ function QueuesSection({
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
                 <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${v}%`} />
                 <YAxis type="category" dataKey="queue" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} width={140} />
-                <Tooltip content={<ChartTip suffix="%" />} />
-                <ReferenceLine x={meta.target} stroke="var(--muted-foreground)" strokeDasharray="4 4" />
+                <Tooltip content={<RichTip meta={meta} />} cursor={{ fill: "var(--muted)", opacity: 0.12 }} />
+                <ReferenceLine
+                  x={meta.target}
+                  stroke="var(--success)"
+                  strokeDasharray="5 4"
+                  label={{ value: `target ${meta.targetLabel}`, fontSize: 10, fill: "var(--success)", position: "top" }}
+                />
+                <ReferenceLine
+                  x={amberBound(meta)}
+                  stroke="var(--warning)"
+                  strokeDasharray="2 4"
+                  label={{ value: meta.isKM ? "watch" : "watch", fontSize: 10, fill: "var(--warning)", position: "top" }}
+                />
                 <Bar dataKey="rate" radius={[0, 6, 6, 0]}>
+                  <LabelList dataKey="rate" position="right" formatter={(v: number) => `${v.toFixed(1)}%`} style={{ fill: "var(--foreground)", fontSize: 11, fontWeight: 600 }} />
                   {top.map((d, i) => (
                     <Cell key={i} fill={
                       d.rag === "green" ? "var(--success)"
