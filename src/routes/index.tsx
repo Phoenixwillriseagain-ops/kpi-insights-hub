@@ -463,6 +463,7 @@ function Analysis({
           <TabTrigger value="weekly"  icon={Activity}>Weekly Trend</TabTrigger>
           <TabTrigger value="queues"  icon={Layers}>Queue Analysis</TabTrigger>
           <TabTrigger value="excl"    icon={Filter}>Exclusion Impact</TabTrigger>
+          <TabTrigger value="quality" icon={CheckCircle2}>KSL-4 &amp; KM-1</TabTrigger>
           {ds.pcms.length > 0 && <TabTrigger value="ksl5b" icon={Users}>KSL-5b Detail</TabTrigger>}
         </TabsList>
 
@@ -480,6 +481,9 @@ function Analysis({
         </TabsContent>
         <TabsContent value="excl" className="space-y-6">
           <ExclusionSection ds={ds} month={month} detected={detectedKpis} />
+        </TabsContent>
+        <TabsContent value="quality" className="space-y-6">
+          <QualityReopenSection ds={ds} month={month} detected={detectedKpis} />
         </TabsContent>
         {ds.pcms.length > 0 && (
           <TabsContent value="ksl5b" className="space-y-6">
@@ -1099,7 +1103,137 @@ function withDeltas<T extends { rate: number }>(rows: T[]): (T & { prev: number 
   });
 }
 
+/* ─────────────────────────────────────────────────── KSL-4 & KM-1 FOCUS */
+
+function QualityReopenSection({ ds, month, detected }: { ds: Dataset; month: string | null; detected: KpiCode[] }) {
+  const codes = (["KSL-4", "KM-1"] as KpiCode[]).filter((c) => detected.includes(c));
+  if (codes.length === 0) {
+    return <Empty message="Neither KSL-4 nor KM-1 sheets were detected in the uploaded SLA workbook." />;
+  }
+  return (
+    <>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {codes.map((c) => <KpiTile key={c} ds={ds} code={c} month={month} />)}
+      </div>
+
+      {codes.map((code) => {
+        const meta = KPI_META[code];
+        const monthly = withDeltas(monthlySummary(ds, code).map((p) => ({ ...p, label: monthLabel(p.label) })));
+        const weekly = withDeltas(weeklySummary(ds, code, { lastN: 6 }).map((p) => ({ ...p, label: weekLabel(p.label) })));
+        const queues = queueBreakdown(ds, code, month);
+        const amber = amberBound(meta);
+        const dotColor = (rag: string) =>
+          rag === "green" ? "var(--success)" : rag === "amber" ? "var(--warning)" : rag === "red" ? "var(--danger)" : "var(--muted-foreground)";
+        const wValues = weekly.map((d) => d.rate).filter((v) => Number.isFinite(v));
+        const minY = wValues.length ? Math.floor(Math.min(...wValues, meta.target) - 1.5) : "auto";
+        const maxY = wValues.length ? Math.ceil(Math.max(...wValues, meta.target) + 1.5) : "auto";
+        return (
+          <div key={code} className="space-y-5">
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ background: meta.color }} />
+              <h2 className="font-display text-lg font-bold">{code} · {meta.what}</h2>
+              <Badge variant="secondary" className="text-[10px]">target {meta.targetLabel}</Badge>
+            </div>
+
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+              <Panel title={`${code} · monthly trend`} subtitle={meta.what} badge={meta.targetLabel} exportName={`quality_monthly_${code}`}>
+                {monthly.length === 0 ? <Empty message="No monthly data." /> : (
+                  <ResponsiveContainer width="100%" height={240}>
+                    <LineChart data={monthly} margin={{ top: 22, right: 24, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                      <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+                      <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} />
+                      <Tooltip content={<RichTip meta={meta} />} cursor={{ stroke: "var(--border)", strokeDasharray: "3 3" }} />
+                      <ReferenceLine y={meta.target} stroke="var(--success)" strokeDasharray="5 4" ifOverflow="extendDomain"
+                        label={{ value: `target ${meta.targetLabel}`, fontSize: 10, fill: "var(--success)", position: "insideTopRight" }} />
+                      <ReferenceLine y={amber} stroke="var(--warning)" strokeDasharray="2 4" ifOverflow="extendDomain"
+                        label={{ value: meta.isKM ? "watch ceiling" : "watch floor", fontSize: 10, fill: "var(--warning)", position: "insideBottomRight" }} />
+                      <Line type="monotone" dataKey="rate" stroke={meta.color} strokeWidth={2.5} isAnimationActive={false}
+                        dot={(props: any) => {
+                          const { cx, cy, payload, index } = props;
+                          return <circle key={index} cx={cx} cy={cy} r={4} fill={dotColor(payload.rag)} stroke={meta.color} strokeWidth={1.5} />;
+                        }}
+                        activeDot={{ r: 6 }}>
+                        <LabelList dataKey="rate" position="top" offset={10}
+                          formatter={(v: number) => (Number.isFinite(v) ? `${v.toFixed(1)}%` : "")}
+                          style={{ fontSize: 11, fontWeight: 600, fill: "var(--foreground)" }} />
+                      </Line>
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </Panel>
+
+              <Panel title={`${code} · last 6 weeks`} subtitle={meta.what} badge={meta.targetLabel} exportName={`quality_weekly_${code}`}>
+                {weekly.length === 0 ? <Empty message="No weekly data." /> : (
+                  <>
+                    <ResponsiveContainer width="100%" height={260}>
+                      <LineChart data={weekly} margin={{ top: 26, right: 28, left: 4, bottom: 6 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                        <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+                        <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} domain={[minY as number | "auto", maxY as number | "auto"]} />
+                        <Tooltip content={<RichTip meta={meta} />} cursor={{ stroke: "var(--border)", strokeDasharray: "3 3" }} />
+                        <ReferenceLine y={meta.target} stroke="var(--success)" strokeDasharray="5 4" ifOverflow="extendDomain"
+                          label={{ value: `target ${meta.targetLabel}`, fontSize: 10, fill: "var(--success)", position: "insideTopRight" }} />
+                        <ReferenceLine y={amber} stroke="var(--warning)" strokeDasharray="2 4" ifOverflow="extendDomain"
+                          label={{ value: meta.isKM ? "watch ceiling" : "watch floor", fontSize: 10, fill: "var(--warning)", position: "insideBottomRight" }} />
+                        <Line type="monotone" dataKey="rate" stroke={meta.color} strokeWidth={2.5} isAnimationActive={false}
+                          dot={(props: any) => {
+                            const { cx, cy, payload, index } = props;
+                            return <circle key={index} cx={cx} cy={cy} r={5} fill={dotColor(payload.rag)} stroke={meta.color} strokeWidth={1.5} />;
+                          }}
+                          activeDot={{ r: 7 }}>
+                          <LabelList dataKey="rate" position="top" offset={10}
+                            formatter={(v: number) => (Number.isFinite(v) ? `${v.toFixed(1)}%` : "")}
+                            style={{ fontSize: 11, fontWeight: 600, fill: "var(--foreground)" }} />
+                        </Line>
+                      </LineChart>
+                    </ResponsiveContainer>
+                    <WeeklyTable rows={weekly} isKM={meta.isKM} />
+                  </>
+                )}
+              </Panel>
+            </div>
+
+            <Panel title={`${code} · queue breakdown`} subtitle="Ranked by ticket volume in the active period" exportName={`quality_queues_${code}`}>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Queue</TableHead>
+                      <TableHead className="text-right">Tickets</TableHead>
+                      <TableHead className="text-right">Breaches</TableHead>
+                      <TableHead className="text-right">Rate</TableHead>
+                      <TableHead className="text-right">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {queues.map((q) => (
+                      <TableRow key={q.queue}>
+                        <TableCell className="font-medium">{q.queue}</TableCell>
+                        <TableCell className="text-right tabular-nums">{q.total.toLocaleString()}</TableCell>
+                        <TableCell className="text-right tabular-nums">{q.breaches.toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-semibold tabular-nums" style={{ color: q.rag === "green" ? "var(--success)" : q.rag === "amber" ? "var(--warning)" : q.rag === "red" ? "var(--danger)" : undefined }}>
+                          {q.display}
+                        </TableCell>
+                        <TableCell className="text-right"><RagBadge rag={q.rag} isKM={meta.isKM} /></TableCell>
+                      </TableRow>
+                    ))}
+                    {queues.length === 0 && (
+                      <TableRow><TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">No queues for this filter.</TableCell></TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </Panel>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 /* ─────────────────────────────────────────────────── KSL-5b DETAIL (PCms) */
+
 
 function Ksl5bDetail({ ds, month }: { ds: Dataset; month: string | null }) {
   // Filter PCms rows by selected month
