@@ -553,29 +553,44 @@ function WeeklySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) {
       {detected.map((code) => {
         const meta = KPI_META[code];
         const data = weeklySummary(ds, code).map((p) => ({ ...p, label: weekLabel(p.label) }));
+        const dotColor = (rag: string) =>
+          rag === "green" ? "var(--success)"
+          : rag === "amber" ? "var(--warning)"
+          : rag === "red" ? "var(--danger)"
+          : "var(--muted-foreground)";
         return (
-          <Panel key={code} title={`${code} · last 6 weeks`} subtitle={meta.what} badge={meta.targetLabel}>
+          <Panel key={code} title={`${code} · last 6 weeks`} subtitle={meta.what} badge={meta.targetLabel} exportName={`weekly_${code}`}>
             {data.length === 0
               ? <Empty message="No weekly data for this KPI." />
               : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={data} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={data} margin={{ top: 24, right: 24, left: 0, bottom: 8 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                     <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-                    <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} />
+                    <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} domain={["auto", "auto"]} />
                     <Tooltip content={<ChartTip suffix="%" />} />
-                    <ReferenceLine y={meta.target} stroke="var(--muted-foreground)" strokeDasharray="4 4" />
-                    <Bar dataKey="rate" radius={[6, 6, 0, 0]}>
-                      {data.map((d, i) => (
-                        <Cell key={i} fill={
-                          d.rag === "green" ? "var(--success)"
-                          : d.rag === "amber" ? "var(--warning)"
-                          : d.rag === "red" ? "var(--danger)"
-                          : "var(--muted)"
-                        } />
-                      ))}
-                    </Bar>
-                  </BarChart>
+                    <ReferenceLine y={meta.target} stroke="var(--muted-foreground)" strokeDasharray="4 4" label={{ value: `target ${meta.targetLabel}`, fontSize: 10, fill: "var(--muted-foreground)", position: "right" }} />
+                    <Line
+                      type="monotone"
+                      dataKey="rate"
+                      stroke={meta.color}
+                      strokeWidth={2.5}
+                      isAnimationActive={false}
+                      dot={(props: any) => {
+                        const { cx, cy, payload, index } = props;
+                        return <circle key={index} cx={cx} cy={cy} r={5} fill={dotColor(payload.rag)} stroke={meta.color} strokeWidth={1.5} />;
+                      }}
+                      activeDot={{ r: 6 }}
+                    >
+                      <LabelList
+                        dataKey="rate"
+                        position="top"
+                        offset={10}
+                        formatter={(v: number) => `${v.toFixed(1)}%`}
+                        style={{ fill: "var(--foreground)", fontSize: 11, fontWeight: 600 }}
+                      />
+                    </Line>
+                  </LineChart>
                 </ResponsiveContainer>
               )}
           </Panel>
