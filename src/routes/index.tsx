@@ -654,14 +654,21 @@ function StatBlock({ label, value, sub, icon: Icon, accent }: {
   );
 }
 
-function KpiTile({ ds, code, month }: { ds: Dataset; code: KpiCode; month: string | null }) {
+const KpiTile = React.memo(function KpiTile({ ds, code, month }: { ds: Dataset; code: KpiCode; month: string | null }) {
   const meta = KPI_META[code];
-  const after = overallByKpi(ds, code, month);       // isExcluded=0 only
-  const before = rawOverallByKpi(ds, code, month);   // everything (incl. isExcluded=1)
-  const trend = useMemo(() => weeklySummary(ds, code, { lastN: 6 }), [ds, code]);
-  const delta = after.rate - before.rate;
-  const excludedCount = before.total - after.total;
+  const { after, before, trend, delta, excludedCount } = useMemo(() => {
+    const a = overallByKpi(ds, code, month);
+    const b = rawOverallByKpi(ds, code, month);
+    return {
+      after: a,
+      before: b,
+      trend: weeklySummary(ds, code, { lastN: 6 }),
+      delta: a.rate - b.rate,
+      excludedCount: b.total - a.total,
+    };
+  }, [ds, code, month]);
   const colorFor = (rag: string) => rag === "green" ? "var(--success)" : rag === "amber" ? "var(--warning)" : rag === "red" ? "var(--danger)" : undefined;
+
 
   return (
     <div className="glass group relative flex flex-col gap-3 overflow-hidden rounded-2xl p-5 transition hover:translate-y-[-2px] hover:ring-glow">
