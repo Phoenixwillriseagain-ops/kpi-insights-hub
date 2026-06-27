@@ -1,73 +1,54 @@
-# Plan — Pulse v2: clearer trends + PCms integration
+## Goal
 
-## 1. Re-label the three upload slots
+Restore the original working dashboard UI as a **pure client-side SPA** (Vite + React + TanStack Router) and deploy it cleanly to GitHub Pages — no Nitro/SSR, no fragile `index.html` shell emission in CI.
 
-Keep three slots, with explicit roles:
+## Why the build keeps breaking
 
-1. **SLA Overall** — `V2-breaches.xlsx`-style workbook. One sheet per KPI (KSL-4, KM-1, KSL-5a, KM-2, KSL-5b, …) with `Excluded` flag per row. This is the source for all KPI rates (existing parser already handles it).
-2. **Exclusions register** — optional override list of ticket IDs to exclude on top of the per-row flag (unchanged behavior, just renamed in UI).
-3. **KSL-5b Deep-dive (PCms)** — `NEW PCms file.xlsx`. New parser reads the `Summary` sheet (per-ticket reason category 1–11) and `Overall` sheet (Week / Month / Ticket / Reason / Agent / BMS ID / NOK/KO / Unique).
+The current project still carries TanStack **Start** (SSR) scaffolding (`src/server.ts`, `src/start.ts`, `error-capture.ts`) and the router plugin auto-detects it, triggering a Nitro SSR build. Nitro then rejects `index.html` as the input (`rollupOptions.input should not be an html file when building for SSR`) and `bun run build` exits 1. The `deploy.yml` workarounds papered over earlier failures but no longer help.
 
-Upload card copy and helper text updated; old "Enriched breaches" wording removed.
+The dashboard itself doesn't need SSR — every feature is client-side (Excel parsing in browser, charts, exports). Removing the Start layer eliminates the Nitro path entirely and makes the GitHub Pages deploy boring and reliable.
 
-## 2. New parser + data model for PCms
+## Changes
 
-New module `src/lib/analyzer/parsePcms.ts`:
+### 1. Strip TanStack Start, keep TanStack Router
 
-- Reads the `Overall` sheet (canonical), falls back to `Summary` if missing.
-- Normalizes: `{ ticket, week, month, reason, category (1–11), agent, bmsId, status (KO/NOK), unique }`.
-- Derives `category` from the reason prefix (`"2. KO Missing 5-days template"` → category `2 — Communication`) using a small map matching the workbook's 11 buckets.
-- ISO month/week normalized to match the SLA dataset keys so they can be cross-filtered by the same period chip.
+- **Delete**: `src/server.ts`, `src/start.ts`, `src/lib/error-capture.ts`.
+- **Edit `src/routes/__root.tsx`**: remove the `reportLovableError` import/usage so nothing references Start internals (keep the existing 404 + error UI).
+- **`src/router.tsx`**: keep `createRouter` from `@tanstack/react-router` and the static `basepath: "/kpi-insights-hub/"` — this is what restores the "original" routing behavior. No `document.baseURI` gymnastics.
+- **`src/main.tsx`**: already mounts `<RouterProvider>` into `#root` — no change needed.
 
-Extended `Dataset` type gets `pcms: PcmsRow[]` and helper selectors:
-`pcmsByCategory(month)`, `pcmsTopAgents(month, n)`, `pcmsWeekly(lastN)`.
+### 2. Fix `index.html`
 
-## 3. Fix the unreadable weekly chart
+It is currently corrupted (orphan font-preconnect fragments on lines 8–12). Restore a clean head with proper `<link rel="preconnect">` and the Google Fonts stylesheet, plus `<script type="module" src="/src/main.tsx">`.
 
-In `WeeklySection`:
+### 3. `vite.config.ts`
 
-- Reduce inline annotations: keep the value label above each point; **move ±pp deltas out of the chart** into the table.
-- Increase y-axis padding (min/max ±1pp) so labels don't collide with the axis.
-- Slightly larger left margin and a `dy` offset for the value label.
-- For very dense values (<1pp gap between adjacent points), only show the value label, never the delta arrow.
+Keep as-is: plain `defineConfig` from `vite`, `base: "/kpi-insights-hub/"`, plugins `TanStackRouterVite`, `react`, `tailwindcss`, `tsconfigPaths`. With Start files gone, the router plugin will no longer enable SSR and `vite build` produces a normal SPA `dist/` with `index.html` + hashed assets.
 
-Below every weekly chart, render a **companion data table** (always visible, responsive: side-by-side ≥1280px, stacked below):
+### 4. `.github/workflows/deploy.yml`
 
-| Week | Total | Breaches | Rate | Δ vs prev | Status |
+Replace the brittle "tolerate failure + emit shell" version with a straightforward Pages deploy:
 
-Status uses the same RAG dot. Both the chart and the table sit inside the same `Panel` so the existing PNG/JPEG/CSV exports capture them together.
+```text
+checkout → setup-bun → bun install → bun run build
+  → cp dist/index.html dist/404.html   (SPA refresh fallback under subpath)
+  → upload-pages-artifact (path: dist)
+  → deploy-pages
+```
 
-## 4. KSL-5b deep-dive section (new tab "KSL-5b Detail")
+No `|| true`, no manual asset hashing, no `<base href>` injection — Vite's `base: "/kpi-insights-hub/"` already rewrites every asset URL correctly for the project page.
 
-Only enabled when the PCms file is uploaded. Sections:
+### 5. Verify
 
-1. **Reason mix (stacked bar)** — by month (default) or week toggle, 11 categories stacked, 100%-stacked switch. Legend is interactive (click to isolate a category).
-2. **Top agents by KO count** — horizontal bar, top 10, with hover tooltip showing reason breakdown for that agent; click a bar to filter the drill table.
-3. **KSL-5b weekly trend overlay** — the existing KSL-5b line chart gets a secondary axis bar series = PCms KO count per week, so dips in conformity visually align with KO spikes.
-4. **Reason-category drill table** — virtualized table (ticket / week / month / reason / agent / status), with category and agent filter chips, search box, and CSV export.
+- Local `bun run build` exits 0 and emits `dist/index.html` referencing `/kpi-insights-hub/assets/...`.
+- After push, the Action's "build" job succeeds and "deploy" publishes; refreshing `/kpi-insights-hub/anything` returns the SPA (via `404.html` fallback) and TanStack Router resolves the route.
 
-All four panels respect the global month chip and have their own PNG/JPEG export menu.
+## Files touched
 
-## 5. Interaction polish (modern dashboard feel)
-
-- Period chips become a sticky sub-header with a "compare to previous" toggle that drives Δ columns globally.
-- Cross-filter: clicking an agent or category anywhere filters all KSL-5b Detail panels (local state, resettable with a "Clear filters" pill).
-- Empty states for each PCms panel ("Upload the PCms file to see this view") with a button that focuses slot 3.
-- Keyboard: Tab order across slots → period chips → tabs → panels; `?` opens a small shortcuts popover (g o / g w / g m / g q / g 5).
-
-## 6. Exports
-
-- Per-panel PNG/JPEG (unchanged) — now also captures the companion weekly table.
-- Workbook export gets two new sheets when PCms is present: `PCms Reasons`, `PCms Top Agents`.
-
-## Technical notes
-
-- New files: `src/lib/analyzer/parsePcms.ts`, `src/lib/analyzer/pcms.ts` (selectors), `src/routes/index.tsx` gains a `KSL5bDetail` section component (kept in same file to match current structure, or split into `src/components/sections/Ksl5bDetail.tsx` if it exceeds ~250 lines).
-- `Dataset` in `parse.ts` extended with `pcms` array + `pcmsLoaded: boolean`; existing computations untouched.
-- Weekly chart fix is purely presentational (`WeeklySection` in `src/routes/index.tsx`) — no changes to `compute.ts`.
-- No new runtime deps; reuses `xlsx`, `recharts`, `html-to-image` already in the project.
+- delete: `src/server.ts`, `src/start.ts`, `src/lib/error-capture.ts`
+- edit: `src/routes/__root.tsx`, `src/router.tsx` (revert to static basepath), `index.html`, `.github/workflows/deploy.yml`
+- unchanged: `vite.config.ts`, dashboard code in `src/routes/index.tsx`, analyzer libs, components
 
 ## Out of scope
 
-- Persistence / server storage (still 100% client-side, GitHub Pages friendly).
-- Auth, sharing links, multi-user state.
+No feature changes to the dashboard UI/logic — purely a build/deploy restoration.
