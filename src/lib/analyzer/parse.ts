@@ -36,6 +36,7 @@ export type Dataset = {
   sla: Partial<Record<KpiCode, SlaRow[]>>;
   breach: Partial<Record<KpiCode, BreachRow[]>>;
   excl: Partial<Record<KpiCode, ExclRow[]>>;
+  pcms: PcmsRow[];
   months: string[];
   weeks: string[];
 };
