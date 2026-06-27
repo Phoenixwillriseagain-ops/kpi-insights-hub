@@ -14,13 +14,27 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
+env:
+  NODE_VERSION: '20'
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: oven-sh/setup-bun@v2
-      - run: bun install --frozen-lockfile
+
+      - name: Cache bun dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
       # Build client + ssr environments. Nitro's static prerender of an
       # ssr:false root route always 404s and then errors on the nitro env
@@ -31,22 +45,38 @@ jobs:
           NITRO_PRESET: static
         run: bun run build || true
 
+      - name: Verify build artifacts
+        run: |
+          if [ ! -d ".output/public" ]; then
+            echo "::error::Build output directory not found"
+            exit 1
+          fi
+          if [ ! -d ".output/public/assets" ]; then
+            echo "::error::Client assets not found in .output/public/assets — build failed"
+            ls -R .output || true
+            exit 1
+          fi
+          echo "✓ Build artifacts verified"
+
       - name: Emit SPA shell (base-path safe)
         run: |
           set -euo pipefail
           OUT=.output/public
-          if [ ! -d "$OUT/assets" ]; then
-            echo "Client assets not found in $OUT/assets — build failed earlier than expected." >&2
-            ls -R .output || true
-            exit 1
-          fi
+          
+          echo "::group::Locating asset files"
           JS=$(ls "$OUT"/assets/index-*.js   2>/dev/null | head -1 | xargs -n1 basename)
           CSS=$(ls "$OUT"/assets/styles-*.css 2>/dev/null | head -1 | xargs -n1 basename)
+          
           if [ -z "$JS" ] || [ -z "$CSS" ]; then
-            echo "Could not locate built JS/CSS entries in $OUT/assets." >&2
+            echo "::error::Could not locate built JS/CSS entries in $OUT/assets"
             ls "$OUT/assets" || true
             exit 1
           fi
+          
+          echo "✓ JS: $JS"
+          echo "✓ CSS: $CSS"
+          echo "::endgroup::"
+          
           # `<base href="./">` makes every relative asset URL resolve against
           # the directory of index.html — so the same shell works at the
           # domain root, at a project subpath (/<repo>/), or any nested
@@ -82,9 +112,15 @@ jobs:
             </body>
           </html>
           EOF
-          # 404.html: redirect any deep link back to index.html with the
-          # path stashed in the query string, so GitHub Pages' static
-          # serving doesn't 404 on client routes or page refreshes.
+          
+          # 404.html: redirect any deep link back to index.html with the path
+          # stashed in the query string, so GitHub Pages' static serving doesn't
+          # 404 on client routes or page refreshes.
+          #
+          # Deep-link encoding strategy:
+          # - '~and~' encodes '&' to avoid query string conflicts
+          # - '~slash~' encodes '/' to preserve path hierarchy
+          # - Client-side script in index.html decodes the redirected path back
           cat > "$OUT/404.html" <<'EOF'
           <!doctype html>
           <html lang="en">
@@ -115,11 +151,15 @@ jobs:
             <body></body>
           </html>
           EOF
+          
           touch "$OUT/.nojekyll"
+          echo "::notice::SPA shell and 404 redirect generated successfully"
 
-      - uses: actions/upload-pages-artifact@v3
+      - name: Upload pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
           path: .output/public
+          retention-days: 1
 
   deploy:
     needs: build
@@ -128,5 +168,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - id: deployment
+      - name: Deploy to GitHub Pages
+        id: deployment
         uses: actions/deploy-pages@v4
