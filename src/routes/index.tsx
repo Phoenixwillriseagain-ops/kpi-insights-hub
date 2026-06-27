@@ -923,7 +923,7 @@ function Panel({ title, subtitle, badge, exportName, children }: { title: string
           <h2 className="font-display text-sm font-bold leading-tight">{title}</h2>
           {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
         </div>
-        {badge && <Badge variant="secondary" className="ml-auto text-[10px]">{badge}</Badge>}
+        {badge && <Badge data-export-nowrap variant="secondary" className="ml-auto whitespace-nowrap text-[10px]">{badge}</Badge>}
         {exportName && <div className={cn(badge ? "" : "ml-auto")}><ExportMenu targetRef={ref} name={exportName} /></div>}
       </header>
       <div className="p-4">{children}</div>
