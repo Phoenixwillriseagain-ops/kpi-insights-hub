@@ -12,4 +12,8 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  vite: {
+    // GitHub Pages serves the site under /<repo>/. Set VITE_BASE in CI to that path.
+    base: process.env.VITE_BASE || "/",
+  },
 });
