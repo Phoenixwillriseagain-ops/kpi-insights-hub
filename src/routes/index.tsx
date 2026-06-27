@@ -756,7 +756,7 @@ function RagBadge({ rag, isKM }: { rag: "green" | "amber" | "red" | "none"; isKM
 
 /* ─────────────────────────────────────────────────── MONTHLY */
 
-function MonthlySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) {
+const MonthlySection = React.memo(function MonthlySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) {
   return (
     <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
       {detected.map((code) => {
