@@ -1557,7 +1557,7 @@ const Ksl5bDetail = React.memo(function Ksl5bDetail({ ds, month }: { ds: Dataset
       </Panel>
     </>
   );
-}
+});
 
 
 function AgentTip({ active, payload }: any) {
