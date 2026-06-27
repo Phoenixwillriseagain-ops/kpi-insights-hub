@@ -1,12 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
-  Activity, ArrowDown, ArrowUp, BarChart3, ChevronRight, FileSpreadsheet,
+  Activity, ArrowDown, ArrowUp, BarChart3, ChevronRight, Download, FileSpreadsheet,
   Filter, Layers, LineChart as LineChartIcon, Loader2, Moon, Pin, RefreshCw,
   Sparkles, Sun, Target, TrendingUp, Upload, X,
 } from "lucide-react";
 import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart,
+  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, LabelList, Line, LineChart,
   ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 
@@ -26,6 +26,8 @@ import {
   exclusionImpact, monthLabel, monthlySummary, overallByKpi, queueBreakdown,
   rawOverallByKpi, weekLabel, weeklySummary,
 } from "@/lib/analyzer/compute";
+import { exportDatasetWorkbook } from "@/lib/analyzer/export";
+import { ExportMenu } from "@/components/ExportMenu";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
@@ -99,7 +101,7 @@ function Dashboard() {
   return (
     <div className="min-h-screen">
       <Toaster richColors position="top-right" />
-      <Header onToggleTheme={toggleTheme} dark={dark} onReset={dataset ? reset : undefined} />
+      <Header onToggleTheme={toggleTheme} dark={dark} onReset={dataset ? reset : undefined} onExport={dataset ? () => exportDatasetWorkbook(dataset, activeMonth) : undefined} />
 
       {!dataset ? (
         <UploadHero
@@ -129,7 +131,7 @@ function Dashboard() {
 
 /* ────────────────────────────────────────────────────────────── HEADER */
 
-function Header({ onToggleTheme, dark, onReset }: { onToggleTheme: () => void; dark: boolean; onReset?: () => void }) {
+function Header({ onToggleTheme, dark, onReset, onExport }: { onToggleTheme: () => void; dark: boolean; onReset?: () => void; onExport?: () => void }) {
   return (
     <header className="sticky top-0 z-40 glass border-b border-border/50">
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-6 py-3">
@@ -141,6 +143,11 @@ function Header({ onToggleTheme, dark, onReset }: { onToggleTheme: () => void; d
           <span className="text-[10px] uppercase tracking-widest text-muted-foreground">KPI & Breaches Analyzer</span>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          {onExport && (
+            <Button variant="outline" size="sm" onClick={onExport} className="gap-1.5">
+              <Download className="h-3.5 w-3.5" /> Export report
+            </Button>
+          )}
           {onReset && (
             <Button variant="ghost" size="sm" onClick={onReset} className="gap-1.5">
               <RefreshCw className="h-3.5 w-3.5" /> New analysis
@@ -516,7 +523,7 @@ function MonthlySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) 
         const meta = KPI_META[code];
         const data = monthlySummary(ds, code).map((p) => ({ ...p, label: monthLabel(p.label) }));
         return (
-          <Panel key={code} title={code} subtitle={meta.what} badge={meta.targetLabel}>
+          <Panel key={code} title={code} subtitle={meta.what} badge={meta.targetLabel} exportName={`monthly_${code}`}>
             {data.length === 0
               ? <Empty message="No monthly data for this KPI." />
               : (
@@ -546,29 +553,44 @@ function WeeklySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) {
       {detected.map((code) => {
         const meta = KPI_META[code];
         const data = weeklySummary(ds, code).map((p) => ({ ...p, label: weekLabel(p.label) }));
+        const dotColor = (rag: string) =>
+          rag === "green" ? "var(--success)"
+          : rag === "amber" ? "var(--warning)"
+          : rag === "red" ? "var(--danger)"
+          : "var(--muted-foreground)";
         return (
-          <Panel key={code} title={`${code} · last 6 weeks`} subtitle={meta.what} badge={meta.targetLabel}>
+          <Panel key={code} title={`${code} · last 6 weeks`} subtitle={meta.what} badge={meta.targetLabel} exportName={`weekly_${code}`}>
             {data.length === 0
               ? <Empty message="No weekly data for this KPI." />
               : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={data} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={data} margin={{ top: 24, right: 24, left: 0, bottom: 8 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                     <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-                    <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} />
+                    <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} domain={["auto", "auto"]} />
                     <Tooltip content={<ChartTip suffix="%" />} />
-                    <ReferenceLine y={meta.target} stroke="var(--muted-foreground)" strokeDasharray="4 4" />
-                    <Bar dataKey="rate" radius={[6, 6, 0, 0]}>
-                      {data.map((d, i) => (
-                        <Cell key={i} fill={
-                          d.rag === "green" ? "var(--success)"
-                          : d.rag === "amber" ? "var(--warning)"
-                          : d.rag === "red" ? "var(--danger)"
-                          : "var(--muted)"
-                        } />
-                      ))}
-                    </Bar>
-                  </BarChart>
+                    <ReferenceLine y={meta.target} stroke="var(--muted-foreground)" strokeDasharray="4 4" label={{ value: `target ${meta.targetLabel}`, fontSize: 10, fill: "var(--muted-foreground)", position: "right" }} />
+                    <Line
+                      type="monotone"
+                      dataKey="rate"
+                      stroke={meta.color}
+                      strokeWidth={2.5}
+                      isAnimationActive={false}
+                      dot={(props: any) => {
+                        const { cx, cy, payload, index } = props;
+                        return <circle key={index} cx={cx} cy={cy} r={5} fill={dotColor(payload.rag)} stroke={meta.color} strokeWidth={1.5} />;
+                      }}
+                      activeDot={{ r: 6 }}
+                    >
+                      <LabelList
+                        dataKey="rate"
+                        position="top"
+                        offset={10}
+                        formatter={(v: number) => `${v.toFixed(1)}%`}
+                        style={{ fill: "var(--foreground)", fontSize: 11, fontWeight: 600 }}
+                      />
+                    </Line>
+                  </LineChart>
                 </ResponsiveContainer>
               )}
           </Panel>
@@ -605,7 +627,7 @@ function QueuesSection({
         <Badge variant="secondary" className="ml-auto">{data.length} queues</Badge>
       </div>
 
-      <Panel title={`${safe} · queue breakdown`} subtitle={meta.what} badge={meta.targetLabel}>
+      <Panel title={`${safe} · queue breakdown`} subtitle={meta.what} badge={meta.targetLabel} exportName={`queues_${safe}`}>
         {top.length === 0
           ? <Empty message="No queue data for this KPI and period." />
           : (
@@ -725,15 +747,17 @@ function Mini({ label, value }: { label: string; value: string }) {
 
 /* ─────────────────────────────────────────────────── Shared panel + helpers */
 
-function Panel({ title, subtitle, badge, children }: { title: string; subtitle?: string; badge?: string; children: React.ReactNode }) {
+function Panel({ title, subtitle, badge, exportName, children }: { title: string; subtitle?: string; badge?: string; exportName?: string; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
   return (
-    <section className="glass overflow-hidden rounded-2xl ring-soft">
+    <section ref={ref} className="glass overflow-hidden rounded-2xl ring-soft">
       <header className="flex items-center gap-3 border-b border-border/60 px-5 py-3">
         <div className="min-w-0">
           <h2 className="font-display text-sm font-bold leading-tight">{title}</h2>
           {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
         </div>
         {badge && <Badge variant="secondary" className="ml-auto text-[10px]">{badge}</Badge>}
+        {exportName && <div className={cn(badge ? "" : "ml-auto")}><ExportMenu targetRef={ref} name={exportName} /></div>}
       </header>
       <div className="p-4">{children}</div>
     </section>
