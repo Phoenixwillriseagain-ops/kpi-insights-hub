@@ -24,24 +24,23 @@ jobs:
           node-version: 24
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - name: Build
+      - name: Build SPA for Pages
         env:
-          NITRO_PRESET: static
           # Serve assets from the repo subpath on GitHub Pages
           VITE_BASE: /kpi-insights-hub/
-        run: bun run build
+        run: bunx vite build --config vite.config.pages.ts
       - name: Prepare static output
         run: |
-          OUT=.output/public
+          OUT=dist
           if [ ! -d "$OUT" ]; then
-            echo "Expected $OUT — adjust this step to match your build output." && exit 1
+            echo "Expected $OUT after vite build." && exit 1
           fi
           # SPA fallback for client-side routing on GitHub Pages
-          cp "$OUT/index.html" "$OUT/404.html" || true
+          cp "$OUT/index.html" "$OUT/404.html"
           touch "$OUT/.nojekyll"
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .output/public
+          path: dist
 
   deploy:
     needs: build
