@@ -55,6 +55,7 @@ function Dashboard() {
   const [busy, setBusy] = useState(false);
   const [dark, setDark] = useState(false);
   const [report, setReport] = useState<ValidationReport | null>(null);
+  const [exclMappings, setExclMappings] = useState<SheetMapping[]>([]);
   const [override, setOverride] = useState(false);
 
   const toggleTheme = () => {
