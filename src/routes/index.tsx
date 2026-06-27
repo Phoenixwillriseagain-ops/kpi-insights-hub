@@ -133,6 +133,7 @@ function Dashboard() {
           canRun={canRun}
           busy={busy}
           report={report}
+          exclMappings={exclMappings}
           override={override}
           setOverride={setOverride}
         />
