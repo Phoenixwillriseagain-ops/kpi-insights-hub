@@ -548,20 +548,41 @@ function MonthlySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) 
     <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
       {detected.map((code) => {
         const meta = KPI_META[code];
-        const data = monthlySummary(ds, code).map((p) => ({ ...p, label: monthLabel(p.label) }));
+        const data = withDeltas(monthlySummary(ds, code).map((p) => ({ ...p, label: monthLabel(p.label) })));
+        const amber = amberBound(meta);
         return (
           <Panel key={code} title={code} subtitle={meta.what} badge={meta.targetLabel} exportName={`monthly_${code}`}>
             {data.length === 0
               ? <Empty message="No monthly data for this KPI." />
               : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={data} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+                <ResponsiveContainer width="100%" height={240}>
+                  <LineChart data={data} margin={{ top: 18, right: 24, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                     <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
                     <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} />
-                    <Tooltip content={<ChartTip suffix="%" />} />
-                    <ReferenceLine y={meta.target} stroke="var(--muted-foreground)" strokeDasharray="4 4" label={{ value: "target", fontSize: 10, fill: "var(--muted-foreground)", position: "right" }} />
-                    <Line type="monotone" dataKey="rate" stroke={meta.color} strokeWidth={2.5} dot={{ r: 4, fill: meta.color, strokeWidth: 0 }} />
+                    <Tooltip content={<RichTip meta={meta} />} cursor={{ stroke: "var(--border)", strokeDasharray: "3 3" }} />
+                    <ReferenceLine
+                      y={meta.target}
+                      stroke="var(--success)"
+                      strokeDasharray="5 4"
+                      ifOverflow="extendDomain"
+                      label={{ value: `target ${meta.targetLabel}`, fontSize: 10, fill: "var(--success)", position: "insideTopRight" }}
+                    />
+                    <ReferenceLine
+                      y={amber}
+                      stroke="var(--warning)"
+                      strokeDasharray="2 4"
+                      ifOverflow="extendDomain"
+                      label={{ value: meta.isKM ? "watch ceiling" : "watch floor", fontSize: 10, fill: "var(--warning)", position: "insideBottomRight" }}
+                    />
+                    <Line type="monotone" dataKey="rate" stroke={meta.color} strokeWidth={2.5} isAnimationActive={false}
+                      dot={(props: any) => {
+                        const { cx, cy, payload, index } = props;
+                        const c = payload.rag === "green" ? "var(--success)" : payload.rag === "amber" ? "var(--warning)" : payload.rag === "red" ? "var(--danger)" : "var(--muted-foreground)";
+                        return <circle key={index} cx={cx} cy={cy} r={4} fill={c} stroke={meta.color} strokeWidth={1.5} />;
+                      }}
+                      activeDot={{ r: 6 }}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               )}
