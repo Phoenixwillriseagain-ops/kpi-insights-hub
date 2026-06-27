@@ -1211,7 +1211,7 @@ function ExportableTile({ ds, code, month }: { ds: Dataset; code: KpiCode; month
 }
 
 
-function QualityReopenSection({ ds, month, detected }: { ds: Dataset; month: string | null; detected: KpiCode[] }) {
+const QualityReopenSection = React.memo(function QualityReopenSection({ ds, month, detected }: { ds: Dataset; month: string | null; detected: KpiCode[] }) {
   const codes = (["KSL-4", "KM-1"] as KpiCode[]).filter((c) => detected.includes(c));
   if (codes.length === 0) {
     return <Empty message="Neither KSL-4 nor KM-1 sheets were detected in the uploaded SLA workbook." />;
