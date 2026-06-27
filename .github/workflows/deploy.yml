@@ -26,7 +26,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Build
         env:
-          NITRO_PRESET: github-pages
+          NITRO_PRESET: static
           # Serve assets from the repo subpath on GitHub Pages
           VITE_BASE: /kpi-insights-hub/
         run: bun run build
