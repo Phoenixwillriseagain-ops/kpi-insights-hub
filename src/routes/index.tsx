@@ -681,7 +681,8 @@ function WeeklySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) {
   );
 }
 
-function WeeklyTable({ rows, isKM }: { rows: ReturnType<typeof withDeltas<{ label: string; total: number; breaches: number; rate: number; rag: "green" | "amber" | "red" | "none" }>>; isKM: boolean }) {
+type WeeklyTableRow = { label: string; total: number; breaches: number; rate: number; rag: "green" | "amber" | "red" | "none"; delta: number | null; prev: number | null };
+function WeeklyTable({ rows, isKM }: { rows: WeeklyTableRow[]; isKM: boolean }) {
   return (
     <div className="mt-4 overflow-x-auto rounded-xl border border-border/50">
       <Table>
