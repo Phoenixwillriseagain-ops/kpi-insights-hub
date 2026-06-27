@@ -523,7 +523,7 @@ function MonthlySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) 
         const meta = KPI_META[code];
         const data = monthlySummary(ds, code).map((p) => ({ ...p, label: monthLabel(p.label) }));
         return (
-          <Panel key={code} title={code} subtitle={meta.what} badge={meta.targetLabel}>
+          <Panel key={code} title={code} subtitle={meta.what} badge={meta.targetLabel} exportName={`monthly_${code}`}>
             {data.length === 0
               ? <Empty message="No monthly data for this KPI." />
               : (
