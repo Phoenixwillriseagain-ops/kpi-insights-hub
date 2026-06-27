@@ -1223,23 +1223,6 @@ function Ksl5bDetail({ ds, month }: { ds: Dataset; month: string | null }) {
   );
 }
 
-function StackedTip({ active, payload, label, normalize }: any) {
-  if (!active || !payload?.length) return null;
-  const total = payload.reduce((s: number, p: any) => s + Number(p.value || 0), 0);
-  return (
-    <div className="glass max-w-[260px] rounded-xl border border-border/60 px-3 py-2 text-xs shadow-md">
-      <p className="mb-1 font-semibold">{label}</p>
-      {payload.filter((p: any) => Number(p.value) > 0).slice().reverse().slice(0, 8).map((p: any, i: number) => (
-        <p key={i} className="flex items-center gap-1.5 tabular-nums">
-          <span className="h-2 w-2 rounded-full" style={{ background: p.color }} />
-          <span className="flex-1 truncate text-muted-foreground">{p.name}</span>
-          <span className="font-semibold">{normalize ? `${Number(p.value).toFixed(1)}%` : Number(p.value).toLocaleString()}</span>
-        </p>
-      ))}
-      {!normalize && <p className="mt-1 border-t border-border/60 pt-1 text-[10px] text-muted-foreground">Total: {total.toLocaleString()}</p>}
-    </div>
-  );
-}
 
 function AgentTip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
