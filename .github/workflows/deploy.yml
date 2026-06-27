@@ -1,30 +1,23 @@
 name: Deploy to GitHub Pages
-
 on:
   push:
     branches: [main]
   workflow_dispatch:
-
 permissions:
   contents: read
   pages: write
   id-token: write
-
 concurrency:
   group: pages
   cancel-in-progress: true
-
 env:
   NODE_VERSION: '20'
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: oven-sh/setup-bun@v2
-
       - name: Cache bun dependencies
         uses: actions/cache@v3
         with:
@@ -32,142 +25,22 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lockb') }}
           restore-keys: |
             ${{ runner.os }}-bun-
-
       - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      # Build client + ssr environments. Nitro's static prerender of an
-      # ssr:false root route always 404s and then errors on the nitro env
-      # build — that's expected, the client assets we need are already on
-      # disk by then, so we tolerate the non-zero exit.
+        run: bun install
       - name: Build
-        env:
-          NITRO_PRESET: static
-        run: bun run build || true
-
-      - name: Verify build artifacts
-        run: |
-          if [ ! -d ".output/public" ]; then
-            echo "::error::Build output directory not found"
-            exit 1
-          fi
-          if [ ! -d ".output/public/assets" ]; then
-            echo "::error::Client assets not found in .output/public/assets — build failed"
-            ls -R .output || true
-            exit 1
-          fi
-          echo "✓ Build artifacts verified"
-
-      - name: Emit SPA shell (base-path safe)
-        run: |
-          set -euo pipefail
-          OUT=.output/public
-          
-          echo "::group::Locating asset files"
-          JS=$(ls "$OUT"/assets/index-*.js   2>/dev/null | head -1 | xargs -n1 basename)
-          CSS=$(ls "$OUT"/assets/styles-*.css 2>/dev/null | head -1 | xargs -n1 basename)
-          
-          if [ -z "$JS" ] || [ -z "$CSS" ]; then
-            echo "::error::Could not locate built JS/CSS entries in $OUT/assets"
-            ls "$OUT/assets" || true
-            exit 1
-          fi
-          
-          echo "✓ JS: $JS"
-          echo "✓ CSS: $CSS"
-          echo "::endgroup::"
-          
-          # `<base href="./">` makes every relative asset URL resolve against
-          # the directory of index.html — so the same shell works at the
-          # domain root, at a project subpath (/<repo>/), or any nested
-          # publish base, with no build-time knowledge of the path.
-          cat > "$OUT/index.html" <<EOF
-          <!doctype html>
-          <html lang="en">
-            <head>
-              <meta charset="UTF-8" />
-              <base href="/kpi-insights-hub/" />
-              <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-              <title>Pulse · KPI & Breaches Analyzer</title>
-              <meta name="description" content="Modern interactive dashboard for SLA breaches: monthly trends, weekly heat, queue drill-down and exclusion crosscheck — all in your browser." />
-              <link rel="stylesheet" href="assets/${CSS}" />
-              <script>
-                // spa-github-pages: decode the path that 404.html stashed
-                // in the query string back into a real URL so client
-                // routing sees the deep link the user actually requested.
-                (function () {
-                  var l = window.location;
-                  if (l.search.indexOf('?/') === 0) {
-                    var decoded = l.search.slice(2).split('&').map(function (s) {
-                      return s.replace(/~and~/g, '&');
-                    }).join('?').replace(/~slash~/g, '/');
-                    window.history.replaceState(null, '', l.pathname.replace(/\/$/, '') + '/' + decoded + l.hash);
-                  }
-                })();
-              </script>
-            </head>
-            <body>
-              <div id="root"></div>
-              <script type="module" src="assets/${JS}"></script>
-            </body>
-          </html>
-          EOF
-          
-          # 404.html: redirect any deep link back to index.html with the path
-          # stashed in the query string, so GitHub Pages' static serving doesn't
-          # 404 on client routes or page refreshes.
-          #
-          # Deep-link encoding strategy:
-          # - '~and~' encodes '&' to avoid query string conflicts
-          # - '~slash~' encodes '/' to preserve path hierarchy
-          # - Client-side script in index.html decodes the redirected path back
-          cat > "$OUT/404.html" <<'EOF'
-          <!doctype html>
-          <html lang="en">
-            <head>
-              <meta charset="UTF-8" />
-              <title>Redirecting…</title>
-              <script>
-                // Infer the publish base by walking up until we reach the
-                // repo root. For user/org sites this is '/'; for project
-                // sites it's '/<repo>/'. We assume a single-segment base
-                // which matches the GitHub Pages project-site convention.
-                (function () {
-                  var l = window.location;
-                  var segments = l.pathname.split('/').filter(Boolean);
-                  // Heuristic: one segment = '/<repo>/<rest>' on project
-                  // sites; zero segments shouldn't reach 404.html.
-                  var base = segments.length > 1 ? '/' + segments[0] + '/' : '/';
-                  var rest = l.pathname.slice(base.length);
-                  l.replace(
-                    l.protocol + '//' + l.host + base + '?/' +
-                    rest.replace(/&/g, '~and~').replace(/\//g, '~slash~') +
-                    (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
-                    l.hash
-                  );
-                })();
-              </script>
-            </head>
-            <body></body>
-          </html>
-          EOF
-          
-          touch "$OUT/.nojekyll"
-          echo "::notice::SPA shell and 404 redirect generated successfully"
-
-      - name: Upload pages artifact
+        run: bun run build
+      - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .output/public
-          retention-days: 1
-
+          path: dist
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
         uses: actions/deploy-pages@v4
