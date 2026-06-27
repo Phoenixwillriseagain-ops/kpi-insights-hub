@@ -75,12 +75,12 @@ function Dashboard() {
       }),
     );
     setFiles((s) => ({ ...s, [slot]: [...s[slot], ...loaded] }));
-    setReport(null); setOverride(false);
+    setReport(null); setOverride(false); setExclMappings([]);
   }, []);
 
   const removeFile = (slot: Slot, idx: number) => {
     setFiles((s) => ({ ...s, [slot]: s[slot].filter((_, i) => i !== idx) }));
-    setReport(null); setOverride(false);
+    setReport(null); setOverride(false); setExclMappings([]);
   };
 
   const canRun = files.sla.some((f) => !f.error);
