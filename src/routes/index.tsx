@@ -165,9 +165,9 @@ function Header({ onToggleTheme, dark, onReset, onExport }: { onToggleTheme: () 
 /* ────────────────────────────────────────────────────────── UPLOAD HERO */
 
 const SLOT_META: Record<Slot, { title: string; desc: string; required?: boolean; icon: typeof FileSpreadsheet; accent: string }> = {
-  sla:    { title: "SLA Export",         desc: "Sheets per KPI code (e.g. KSL-2a, KM-1). Required.", required: true, icon: FileSpreadsheet, accent: "from-[color:var(--chart-1)] to-[color:var(--primary-glow)]" },
-  breach: { title: "Enriched Breaches",  desc: "Optional. Queue/agent/reason context for breaches.", icon: Layers,         accent: "from-[color:var(--chart-3)] to-[color:var(--chart-4)]" },
-  excl:   { title: "Exclusions",         desc: "Optional. Rows where EXCLUDED=1 are cross-checked.", icon: Filter,         accent: "from-[color:var(--chart-2)] to-[color:var(--warning)]" },
+  sla:    { title: "SLA Overall",            desc: "Workbook with one sheet per KPI (KSL-1…KM-2). Source of all KPI rates.", required: true, icon: FileSpreadsheet, accent: "from-[color:var(--chart-1)] to-[color:var(--primary-glow)]" },
+  breach: { title: "KSL-5b Deep-dive (PCms)", desc: "Optional. Per-ticket KO/NOK reason categories — unlocks the KSL-5b Detail tab.", icon: Layers,         accent: "from-[color:var(--chart-3)] to-[color:var(--chart-4)]" },
+  excl:   { title: "Exclusions register",    desc: "Optional. Extra ticket IDs to exclude on top of the per-row Excluded flag.", icon: Filter,         accent: "from-[color:var(--chart-2)] to-[color:var(--warning)]" },
 };
 
 function UploadHero({
