@@ -627,7 +627,7 @@ function QueuesSection({
         <Badge variant="secondary" className="ml-auto">{data.length} queues</Badge>
       </div>
 
-      <Panel title={`${safe} · queue breakdown`} subtitle={meta.what} badge={meta.targetLabel}>
+      <Panel title={`${safe} · queue breakdown`} subtitle={meta.what} badge={meta.targetLabel} exportName={`queues_${safe}`}>
         {top.length === 0
           ? <Empty message="No queue data for this KPI and period." />
           : (
