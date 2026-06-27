@@ -29,7 +29,7 @@ import {
 import { exportDatasetWorkbook } from "@/lib/analyzer/export";
 import { ExportMenu } from "@/components/ExportMenu";
 import { PCMS_CATEGORIES, pcmsTopAgents, pcmsWeeklyCounts } from "@/lib/analyzer/parsePcms";
-import { buildReport, type ValidationReport, type ValidationIssue } from "@/lib/analyzer/validate";
+import { buildReport, buildExclMappings, type ValidationReport, type ValidationIssue, type SheetMapping } from "@/lib/analyzer/validate";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
@@ -55,6 +55,7 @@ function Dashboard() {
   const [busy, setBusy] = useState(false);
   const [dark, setDark] = useState(false);
   const [report, setReport] = useState<ValidationReport | null>(null);
+  const [exclMappings, setExclMappings] = useState<SheetMapping[]>([]);
   const [override, setOverride] = useState(false);
 
   const toggleTheme = () => {
@@ -74,12 +75,12 @@ function Dashboard() {
       }),
     );
     setFiles((s) => ({ ...s, [slot]: [...s[slot], ...loaded] }));
-    setReport(null); setOverride(false);
+    setReport(null); setOverride(false); setExclMappings([]);
   }, []);
 
   const removeFile = (slot: Slot, idx: number) => {
     setFiles((s) => ({ ...s, [slot]: s[slot].filter((_, i) => i !== idx) }));
-    setReport(null); setOverride(false);
+    setReport(null); setOverride(false); setExclMappings([]);
   };
 
   const canRun = files.sla.some((f) => !f.error);
@@ -94,6 +95,7 @@ function Dashboard() {
         files.excl.filter((f) => f.wb).map((f) => ({ name: f.name, wb: f.wb })),
       );
       setReport(rep);
+      setExclMappings(buildExclMappings(files.excl.filter((f) => f.wb).map((f) => ({ name: f.name, wb: f.wb }))));
       if (!rep.ok && !override) {
         toast.error("Fix required columns before running", {
           description: "See the validation panel for details, or toggle “Run anyway” to bypass.",
@@ -115,7 +117,7 @@ function Dashboard() {
     } finally { setBusy(false); }
   };
 
-  const reset = () => { setDataset(null); setFiles({ sla: [], breach: [], excl: [] }); setReport(null); setOverride(false); };
+  const reset = () => { setDataset(null); setFiles({ sla: [], breach: [], excl: [] }); setReport(null); setOverride(false); setExclMappings([]); };
 
   return (
     <div className="min-h-screen">
@@ -131,6 +133,7 @@ function Dashboard() {
           canRun={canRun}
           busy={busy}
           report={report}
+          exclMappings={exclMappings}
           override={override}
           setOverride={setOverride}
         />
@@ -193,7 +196,7 @@ const SLOT_META: Record<Slot, { title: string; desc: string; required?: boolean;
 };
 
 function UploadHero({
-  files, onAdd, onRemove, onRun, canRun, busy, report, override, setOverride,
+  files, onAdd, onRemove, onRun, canRun, busy, report, exclMappings, override, setOverride,
 }: {
   files: Record<Slot, LoadedFile[]>;
   onAdd: (slot: Slot, list: FileList | File[]) => void;
@@ -202,6 +205,7 @@ function UploadHero({
   canRun: boolean;
   busy: boolean;
   report: ValidationReport | null;
+  exclMappings: SheetMapping[];
   override: boolean;
   setOverride: (v: boolean) => void;
 }) {
@@ -236,6 +240,8 @@ function UploadHero({
       </div>
 
       {report && <ValidationPanel report={report} override={override} setOverride={setOverride} />}
+      {exclMappings.length > 0 && <ExclusionMappingPreview mappings={exclMappings} />}
+
 
       <div className="mt-10 flex flex-col items-center justify-center gap-2">
         <Button
@@ -336,6 +342,75 @@ function IssueRow({ issue }: { issue: ValidationIssue }) {
         {issue.hint && <p className="text-muted-foreground">{issue.hint}</p>}
       </div>
     </li>
+  );
+}
+
+function ExclusionMappingPreview({ mappings }: { mappings: SheetMapping[] }) {
+  return (
+    <section
+      className="mt-6 glass rounded-2xl border border-border/40"
+      aria-label="Exclusion column mapping preview"
+    >
+      <header className="flex items-center gap-2 border-b border-border/40 px-4 py-3">
+        <Layers className="h-4 w-4 text-primary" />
+        <h3 className="text-sm font-bold">Exclusion column mapping</h3>
+        <span className="text-xs text-muted-foreground">
+          Rename the highlighted headers in your file to the canonical names below.
+        </span>
+      </header>
+      <div className="max-h-80 space-y-4 overflow-y-auto p-4">
+        {mappings.map((m, i) => (
+          <div key={i} className="rounded-xl border border-border/40 bg-card/40 p-3">
+            <p className="mb-2 text-xs font-semibold">
+              <span className="text-foreground">{m.file}</span>
+              <span className="text-muted-foreground"> · sheet “{m.sheet}”</span>
+            </p>
+            <div className="overflow-hidden rounded-lg border border-border/40">
+              <table className="w-full text-xs">
+                <thead className="bg-secondary/50 text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold">Required</th>
+                    <th className="px-3 py-2 text-left font-semibold">Your header</th>
+                    <th className="px-3 py-2 text-left font-semibold">Suggested rename</th>
+                    <th className="px-3 py-2 text-right font-semibold">Match</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {m.rows.map((r, j) => {
+                    const tone =
+                      r.status === "ok" ? "var(--success)" :
+                      r.status === "rename" ? "var(--warning)" : "var(--danger)";
+                    return (
+                      <tr key={j} className="border-t border-border/40">
+                        <td className="px-3 py-2 font-medium">{r.required}</td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {r.candidate ? <code className="rounded bg-secondary/60 px-1.5 py-0.5">{r.candidate}</code> : <span className="italic">— not found —</span>}
+                        </td>
+                        <td className="px-3 py-2">
+                          {r.status === "ok"
+                            ? <span className="text-[color:var(--success)]">No change needed</span>
+                            : r.status === "rename"
+                              ? <span>Rename to <code className="rounded bg-[color:var(--warning)]/15 px-1.5 py-0.5 text-[color:var(--warning)]">{r.canonical}</code></span>
+                              : <span>Add column <code className="rounded bg-[color:var(--danger)]/15 px-1.5 py-0.5 text-[color:var(--danger)]">{r.canonical}</code></span>}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <span
+                            className="inline-block min-w-12 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                            style={{ background: `color-mix(in oklab, ${tone} 15%, transparent)`, color: tone }}
+                          >
+                            {Math.round(r.score * 100)}%
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
