@@ -368,6 +368,7 @@ function Analysis({
           <TabTrigger value="weekly"  icon={Activity}>Weekly Trend</TabTrigger>
           <TabTrigger value="queues"  icon={Layers}>Queue Analysis</TabTrigger>
           <TabTrigger value="excl"    icon={Filter}>Exclusion Impact</TabTrigger>
+          {ds.pcms.length > 0 && <TabTrigger value="ksl5b" icon={Users}>KSL-5b Detail</TabTrigger>}
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
@@ -385,6 +386,11 @@ function Analysis({
         <TabsContent value="excl" className="space-y-6">
           <ExclusionSection ds={ds} month={month} detected={detectedKpis} />
         </TabsContent>
+        {ds.pcms.length > 0 && (
+          <TabsContent value="ksl5b" className="space-y-6">
+            <Ksl5bDetail ds={ds} month={month} />
+          </TabsContent>
+        )}
       </Tabs>
     </main>
   );
