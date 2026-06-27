@@ -932,7 +932,7 @@ function WeeklyTable({ rows, isKM }: { rows: WeeklyTableRow[]; isKM: boolean }) 
 
 /* ─────────────────────────────────────────────────── QUEUES */
 
-function QueuesSection({
+const QueuesSection = React.memo(function QueuesSection({
   ds, month, detected, activeKpi, setActiveKpi,
 }: { ds: Dataset; month: string | null; detected: KpiCode[]; activeKpi: KpiCode; setActiveKpi: (k: KpiCode) => void }) {
   const safe = detected.includes(activeKpi) ? activeKpi : (detected[0] ?? "KSL-2c");
