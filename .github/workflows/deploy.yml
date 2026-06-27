@@ -21,21 +21,51 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
+
+      # Build client + ssr environments. Nitro's static prerender of an
+      # ssr:false root route always 404s and then errors on the nitro env
+      # build — that's expected, the client assets we need are already on
+      # disk by then, so we tolerate the non-zero exit.
       - name: Build
         env:
-          # Nitro will prerender all routes (they are all ssr:false) and emit static files
           NITRO_PRESET: static
-        run: bun run build
-      - name: Prepare static output
+        run: bun run build || true
+
+      - name: Emit SPA shell
         run: |
-          # Nitro's static preset emits prerendered HTML to .output/public
+          set -euo pipefail
           OUT=.output/public
-          if [ ! -d "$OUT" ]; then
-            echo "Expected $OUT — adjust this step to match your build output." && exit 1
+          if [ ! -d "$OUT/assets" ]; then
+            echo "Client assets not found in $OUT/assets — build failed earlier than expected." >&2
+            ls -R .output || true
+            exit 1
           fi
-          # SPA fallback for client-side routing on GitHub Pages
-          cp "$OUT/index.html" "$OUT/404.html" || true
+          JS=$(ls "$OUT"/assets/index-*.js   2>/dev/null | head -1 | xargs -n1 basename)
+          CSS=$(ls "$OUT"/assets/styles-*.css 2>/dev/null | head -1 | xargs -n1 basename)
+          if [ -z "$JS" ] || [ -z "$CSS" ]; then
+            echo "Could not locate built JS/CSS entries in $OUT/assets." >&2
+            ls "$OUT/assets" || true
+            exit 1
+          fi
+          cat > "$OUT/index.html" <<EOF
+          <!doctype html>
+          <html lang="en">
+            <head>
+              <meta charset="UTF-8" />
+              <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+              <title>Pulse · KPI & Breaches Analyzer</title>
+              <meta name="description" content="Modern interactive dashboard for SLA breaches: monthly trends, weekly heat, queue drill-down and exclusion crosscheck — all in your browser." />
+              <link rel="stylesheet" href="./assets/${CSS}" />
+            </head>
+            <body>
+              <div id="root"></div>
+              <script type="module" src="./assets/${JS}"></script>
+            </body>
+          </html>
+          EOF
+          cp "$OUT/index.html" "$OUT/404.html"
           touch "$OUT/.nojekyll"
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .output/public
