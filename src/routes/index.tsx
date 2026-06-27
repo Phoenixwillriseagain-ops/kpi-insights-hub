@@ -324,9 +324,7 @@ function Analysis({
   ds: Dataset; month: string | null; setMonth: (m: string | null) => void;
   activeKpi: KpiCode; setActiveKpi: (k: KpiCode) => void;
 }) {
-  const monthData = month ? ds.months[month] : undefined;
-  const summary = month ? monthlySummary(monthData!) : rawOverallByKpi(ds.sla);
-  const weeklies = month ? monthData!.weeks : ds.weeks.slice(-6);
+  const exportRef = useRef<HTMLDivElement>(null);
 
   return (
     <main className="mx-auto max-w-7xl space-y-8 px-6 py-8">
@@ -335,13 +333,13 @@ function Analysis({
         <div className="flex flex-1 flex-wrap gap-2">
           <div className="flex-1 min-w-56">
             <label className="text-xs font-medium text-muted-foreground">Month</label>
-            <Select value={month ?? ""} onValueChange={(v) => setMonth(v || null)}>
+            <Select value={month ?? "__all"} onValueChange={(v) => setMonth(v === "__all" ? null : v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Overall" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Overall</SelectItem>
-                {ds.months_list.map((m) => (
+                <SelectItem value="__all">Overall</SelectItem>
+                {ds.months.map((m) => (
                   <SelectItem key={m} value={m}>
                     {monthLabel(m)}
                   </SelectItem>
@@ -367,32 +365,32 @@ function Analysis({
           </div>
         </div>
 
-        {month && (
-          <ExportMenu ds={ds} month={month} />
-        )}
+        <ExportMenu targetRef={exportRef} name={`pulse-${activeKpi}${month ? `-${month}` : ""}`} />
       </div>
 
-      {/* Tabs */}
-      <Tabs defaultValue="overview" className="w-full">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="trend">6-Week Trend</TabsTrigger>
-          <TabsTrigger value="drill">Per Queue</TabsTrigger>
-        </TabsList>
+      <div ref={exportRef}>
+        {/* Tabs */}
+        <Tabs defaultValue="overview" className="w-full">
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="trend">6-Week Trend</TabsTrigger>
+            <TabsTrigger value="drill">Per Queue</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="overview" className="space-y-6">
-          <KpiGrid ds={ds} activeKpi={activeKpi} summary={summary} />
-          <KpiDetails ds={ds} activeKpi={activeKpi} summary={summary} month={month} />
-        </TabsContent>
+          <TabsContent value="overview" className="space-y-6">
+            <KpiGrid ds={ds} activeKpi={activeKpi} setActiveKpi={setActiveKpi} month={month} />
+            <KpiDetails ds={ds} activeKpi={activeKpi} month={month} />
+          </TabsContent>
 
-        <TabsContent value="trend" className="space-y-6">
-          <TrendChart weeklies={weeklies} activeKpi={activeKpi} />
-        </TabsContent>
+          <TabsContent value="trend" className="space-y-6">
+            <TrendChart ds={ds} activeKpi={activeKpi} />
+          </TabsContent>
 
-        <TabsContent value="drill" className="space-y-6">
-          <DrillDown ds={ds} month={month} activeKpi={activeKpi} />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="drill" className="space-y-6">
+            <DrillDown ds={ds} month={month} activeKpi={activeKpi} />
+          </TabsContent>
+        </Tabs>
+      </div>
     </main>
   );
 }
@@ -400,34 +398,37 @@ function Analysis({
 /* ────────────────────────────────────────────────────── KPI GRID */
 
 function KpiGrid({
-  ds, activeKpi, summary,
+  ds, activeKpi, setActiveKpi, month,
 }: {
-  ds: Dataset; activeKpi: KpiCode; summary: Record<KpiCode, { ok: boolean; tickets: number; breaches: number; pct: number }>;
+  ds: Dataset; activeKpi: KpiCode; setActiveKpi: (k: KpiCode) => void; month: string | null;
 }) {
   return (
     <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
       {KPI_ORDER.map((k) => {
-        const s = summary[k];
         const meta = KPI_META[k];
+        const s = overallByKpi(ds, k, month);
+        const ok = s.rag === "green";
         return (
-          <div
+          <button
             key={k}
+            type="button"
+            onClick={() => setActiveKpi(k)}
             className={cn(
               "rounded-lg p-3 text-center transition-colors",
               k === activeKpi ? "bg-primary/10 ring-1 ring-primary" : "bg-muted hover:bg-muted/80 cursor-pointer",
             )}
           >
             <div className="text-sm font-semibold text-foreground">{k}</div>
-            <div className={cn("mt-2 text-2xl font-bold", s.ok ? "text-green-600" : "text-red-600")}>
-              {s.pct.toFixed(1)}%
+            <div className={cn("mt-2 text-2xl font-bold", ok ? "text-green-600" : s.rag === "amber" ? "text-amber-600" : "text-red-600")}>
+              {s.display}
             </div>
             <div className="mt-1 text-xs text-muted-foreground">
-              {s.tickets} tickets · {s.breaches} breaches
+              {s.total} tickets · {s.breaches} breaches
             </div>
-            <Badge variant={s.ok ? "outline" : "destructive"} className="mt-2 w-full justify-center">
-              {ragLabel(s.pct, meta.target)}
+            <Badge variant={ok ? "outline" : "destructive"} className="mt-2 w-full justify-center">
+              {ragLabel(s.rag, meta.isKM)}
             </Badge>
-          </div>
+          </button>
         );
       })}
     </div>
@@ -437,39 +438,43 @@ function KpiGrid({
 /* ─────────────────────────────────────────────────── KPI DETAILS */
 
 function KpiDetails({
-  ds, activeKpi, summary, month,
+  ds, activeKpi, month,
 }: {
-  ds: Dataset; activeKpi: KpiCode; summary: Record<KpiCode, { ok: boolean; tickets: number; breaches: number; pct: number }>;
-  month: string | null;
+  ds: Dataset; activeKpi: KpiCode; month: string | null;
 }) {
   const meta = KPI_META[activeKpi];
-  const s = summary[activeKpi];
-  const kpiData = month ? ds.months[month]?.kpis?.[activeKpi] : ds.sla[activeKpi];
+  const after = overallByKpi(ds, activeKpi, month);
+  const before = rawOverallByKpi(ds, activeKpi, month);
+  const impact = exclusionImpact(ds, activeKpi, month);
 
-  if (!kpiData) return <Empty message="No data for selected KPI" />;
+  if (!after.total && !before.total) return <Empty message="No data for selected KPI" />;
+  const ok = after.rag === "green";
 
   return (
     <div className="rounded-lg border border-border p-6">
-      <h3 className="mb-4 text-lg font-semibold text-foreground">{activeKpi} Details</h3>
+      <h3 className="mb-1 text-lg font-semibold text-foreground">{activeKpi} — {meta.what}</h3>
+      <p className="mb-4 text-xs text-muted-foreground">Target {meta.targetLabel}</p>
       <div className="grid gap-4 md:grid-cols-4">
         <div>
-          <div className="text-sm text-muted-foreground">Compliance</div>
-          <div className="mt-1 text-2xl font-bold text-foreground">{s.pct.toFixed(2)}%</div>
-          <div className="mt-1 text-xs text-muted-foreground">Target: {meta.target}%</div>
+          <div className="text-sm text-muted-foreground">Before exclusion</div>
+          <div className="mt-1 text-2xl font-bold text-foreground">{before.display}</div>
+          <div className="mt-1 text-xs text-muted-foreground">{before.total} tickets · {before.breaches} breaches</div>
         </div>
         <div>
-          <div className="text-sm text-muted-foreground">Tickets</div>
-          <div className="mt-1 text-2xl font-bold text-foreground">{s.tickets}</div>
+          <div className="text-sm text-muted-foreground">After exclusion</div>
+          <div className="mt-1 text-2xl font-bold text-foreground">{after.display}</div>
+          <div className="mt-1 text-xs text-muted-foreground">{after.total} tickets · {after.breaches} breaches</div>
         </div>
         <div>
-          <div className="text-sm text-muted-foreground">Breaches</div>
-          <div className="mt-1 text-2xl font-bold text-red-600">{s.breaches}</div>
+          <div className="text-sm text-muted-foreground">Excluded</div>
+          <div className="mt-1 text-2xl font-bold text-foreground">{impact.excluded}</div>
+          <div className="mt-1 text-xs text-muted-foreground">tickets removed</div>
         </div>
         <div>
           <div className="text-sm text-muted-foreground">Status</div>
           <div className="mt-1">
-            <Badge variant={s.ok ? "outline" : "destructive"}>
-              {ragLabel(s.pct, meta.target)}
+            <Badge variant={ok ? "outline" : "destructive"}>
+              {ragLabel(after.rag, meta.isKM)}
             </Badge>
           </div>
         </div>
@@ -480,29 +485,27 @@ function KpiDetails({
 
 /* ──────────────────────────────────────────── TREND CHART */
 
-function TrendChart({
-  weeklies, activeKpi,
-}: {
-  weeklies: Dataset["weeks"]; activeKpi: KpiCode;
-}) {
+function TrendChart({ ds, activeKpi }: { ds: Dataset; activeKpi: KpiCode }) {
   const meta = KPI_META[activeKpi];
-  const chartData = weeklies.map((w) => ({
-    week: weekLabel(w.isoWeek),
-    pct: w.kpis?.[activeKpi]?.pct ?? 0,
-  }));
+  const weekly = weeklySummary(ds, activeKpi, { lastN: 6 });
+  const chartData = weekly.map((p) => ({ week: weekLabel(p.label), pct: p.rate }));
+
+  if (!chartData.length) return <Empty message="No weekly data" />;
 
   return (
     <div className="rounded-lg border border-border p-6">
-      <h3 className="mb-4 text-lg font-semibold text-foreground">{activeKpi} - 6-Week Trend</h3>
-      <ResponsiveContainer width="100%" height={300}>
-        <AreaChart data={chartData}>
+      <h3 className="mb-4 text-lg font-semibold text-foreground">{activeKpi} — 6-Week Trend</h3>
+      <ResponsiveContainer width="100%" height={320}>
+        <LineChart data={chartData} margin={{ top: 20, right: 20, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="week" />
-          <YAxis domain={[0, 100]} />
-          <Tooltip formatter={(v) => `${(v as number).toFixed(1)}%`} />
-          <ReferenceLine y={meta.target} stroke="#888" strokeDasharray="3 3" label={`Target: ${meta.target}%`} />
-          <Area type="monotone" dataKey="pct" stroke="#3b82f6" fill="#3b82f6" opacity={0.2} />
-        </AreaChart>
+          <YAxis domain={meta.isRating ? [0, 5] : [0, 100]} />
+          <Tooltip formatter={(v) => (meta.isRating ? (v as number).toFixed(2) : `${(v as number).toFixed(1)}%`)} />
+          <ReferenceLine y={meta.target} stroke="#888" strokeDasharray="3 3" label={`Target: ${meta.targetLabel}`} />
+          <Line type="monotone" dataKey="pct" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }}>
+            <LabelList dataKey="pct" position="top" formatter={(v: number) => (meta.isRating ? v.toFixed(2) : `${v.toFixed(1)}%`)} />
+          </Line>
+        </LineChart>
       </ResponsiveContainer>
     </div>
   );
@@ -515,10 +518,9 @@ function DrillDown({
 }: {
   ds: Dataset; month: string | null; activeKpi: KpiCode;
 }) {
-  const monthData = month ? ds.months[month] : undefined;
-  const breakdown = month ? queueBreakdown(monthData!, activeKpi) : {};
+  const breakdown = queueBreakdown(ds, activeKpi, month);
 
-  if (!Object.keys(breakdown).length) return <Empty message="No queue data available" />;
+  if (!breakdown.length) return <Empty message="No queue data available" />;
 
   return (
     <div className="rounded-lg border border-border p-6">
@@ -530,16 +532,16 @@ function DrillDown({
               <TableHead>Queue</TableHead>
               <TableHead className="text-right">Tickets</TableHead>
               <TableHead className="text-right">Breaches</TableHead>
-              <TableHead className="text-right">Compliance %</TableHead>
+              <TableHead className="text-right">Value</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {Object.entries(breakdown).map(([queue, data]) => (
-              <TableRow key={queue}>
-                <TableCell className="font-medium">{queue}</TableCell>
-                <TableCell className="text-right">{data.tickets}</TableCell>
-                <TableCell className="text-right text-red-600">{data.breaches}</TableCell>
-                <TableCell className="text-right font-semibold">{data.pct.toFixed(1)}%</TableCell>
+            {breakdown.map((row) => (
+              <TableRow key={row.queue}>
+                <TableCell className="font-medium">{row.queue}</TableCell>
+                <TableCell className="text-right">{row.total}</TableCell>
+                <TableCell className="text-right text-red-600">{row.breaches}</TableCell>
+                <TableCell className="text-right font-semibold">{row.display}</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -552,3 +554,4 @@ function DrillDown({
 function Empty({ message }: { message: string }) {
   return <p className="py-10 text-center text-xs text-muted-foreground">{message}</p>;
 }
+
