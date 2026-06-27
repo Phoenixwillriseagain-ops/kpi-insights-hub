@@ -29,6 +29,7 @@ import {
 import { exportDatasetWorkbook } from "@/lib/analyzer/export";
 import { ExportMenu } from "@/components/ExportMenu";
 import { PCMS_CATEGORIES, pcmsTopAgents, pcmsWeeklyCounts } from "@/lib/analyzer/parsePcms";
+import { buildReport, type ValidationReport, type ValidationIssue } from "@/lib/analyzer/validate";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
