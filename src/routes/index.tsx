@@ -935,19 +935,6 @@ function Empty({ message }: { message: string }) {
   return <p className="py-10 text-center text-xs text-muted-foreground">{message}</p>;
 }
 
-function ChartTip({ active, payload, label, suffix = "" }: any) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="glass rounded-lg border border-border/60 px-3 py-2 text-xs shadow-md">
-      <p className="font-semibold">{label}</p>
-      {payload.map((p: any, i: number) => (
-        <p key={i} className="tabular-nums" style={{ color: p.color }}>
-          {p.name ?? "value"}: {typeof p.value === "number" ? p.value.toFixed(1) : p.value}{suffix}
-        </p>
-      ))}
-    </div>
-  );
-}
 
 function RichTip({ active, payload, label, meta }: any) {
   if (!active || !payload?.length) return null;
