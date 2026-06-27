@@ -31,7 +31,7 @@ jobs:
           NITRO_PRESET: static
         run: bun run build || true
 
-      - name: Emit SPA shell
+      - name: Emit SPA shell (base-path safe)
         run: |
           set -euo pipefail
           OUT=.output/public
@@ -47,23 +47,74 @@ jobs:
             ls "$OUT/assets" || true
             exit 1
           fi
+          # `<base href="./">` makes every relative asset URL resolve against
+          # the directory of index.html — so the same shell works at the
+          # domain root, at a project subpath (/<repo>/), or any nested
+          # publish base, with no build-time knowledge of the path.
           cat > "$OUT/index.html" <<EOF
           <!doctype html>
           <html lang="en">
             <head>
               <meta charset="UTF-8" />
+              <base href="./" />
               <meta name="viewport" content="width=device-width, initial-scale=1.0" />
               <title>Pulse · KPI & Breaches Analyzer</title>
               <meta name="description" content="Modern interactive dashboard for SLA breaches: monthly trends, weekly heat, queue drill-down and exclusion crosscheck — all in your browser." />
-              <link rel="stylesheet" href="./assets/${CSS}" />
+              <link rel="stylesheet" href="assets/${CSS}" />
+              <script>
+                // spa-github-pages: decode the path that 404.html stashed
+                // in the query string back into a real URL so client
+                // routing sees the deep link the user actually requested.
+                (function () {
+                  var l = window.location;
+                  if (l.search.indexOf('?/') === 0) {
+                    var decoded = l.search.slice(2).split('&').map(function (s) {
+                      return s.replace(/~and~/g, '&');
+                    }).join('?').replace(/~slash~/g, '/');
+                    window.history.replaceState(null, '', l.pathname.replace(/\/$/, '') + '/' + decoded + l.hash);
+                  }
+                })();
+              </script>
             </head>
             <body>
               <div id="root"></div>
-              <script type="module" src="./assets/${JS}"></script>
+              <script type="module" src="assets/${JS}"></script>
             </body>
           </html>
           EOF
-          cp "$OUT/index.html" "$OUT/404.html"
+          # 404.html: redirect any deep link back to index.html with the
+          # path stashed in the query string, so GitHub Pages' static
+          # serving doesn't 404 on client routes or page refreshes.
+          cat > "$OUT/404.html" <<'EOF'
+          <!doctype html>
+          <html lang="en">
+            <head>
+              <meta charset="UTF-8" />
+              <title>Redirecting…</title>
+              <script>
+                // Infer the publish base by walking up until we reach the
+                // repo root. For user/org sites this is '/'; for project
+                // sites it's '/<repo>/'. We assume a single-segment base
+                // which matches the GitHub Pages project-site convention.
+                (function () {
+                  var l = window.location;
+                  var segments = l.pathname.split('/').filter(Boolean);
+                  // Heuristic: one segment = '/<repo>/<rest>' on project
+                  // sites; zero segments shouldn't reach 404.html.
+                  var base = segments.length > 1 ? '/' + segments[0] + '/' : '/';
+                  var rest = l.pathname.slice(base.length);
+                  l.replace(
+                    l.protocol + '//' + l.host + base + '?/' +
+                    rest.replace(/&/g, '~and~').replace(/\//g, '~slash~') +
+                    (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+                    l.hash
+                  );
+                })();
+              </script>
+            </head>
+            <body></body>
+          </html>
+          EOF
           touch "$OUT/.nojekyll"
 
       - uses: actions/upload-pages-artifact@v3
