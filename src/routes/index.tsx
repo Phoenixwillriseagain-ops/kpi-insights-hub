@@ -745,65 +745,82 @@ function QueuesSection({
 }: { ds: Dataset; month: string | null; detected: KpiCode[]; activeKpi: KpiCode; setActiveKpi: (k: KpiCode) => void }) {
   const safe = detected.includes(activeKpi) ? activeKpi : (detected[0] ?? "KSL-2c");
   const meta = KPI_META[safe];
-  const data = queueBreakdown(ds, safe, month);
-  const top = data.slice(0, 10);
+  const queues = useMemo(
+    () => queueBreakdown(ds, safe, month),
+    [ds, safe, month],
+  );
+  const [activeQueue, setActiveQueue] = useState<string>("");
+  const queue = queues.find((q) => q.queue === activeQueue)?.queue ?? queues[0]?.queue ?? "";
+
+  const weekly = useMemo(() => {
+    if (!queue) return [];
+    return weeklyQueueSummary(ds, safe, queue, { lastN: 6 }).map((p) => ({ ...p, label: weekLabel(p.label) }));
+  }, [ds, safe, queue]);
+  const weeklyData = withDeltas(weekly);
+  const amber = amberBound(meta);
+  const dotColor = (rag: string) =>
+    rag === "green" ? "var(--success)" : rag === "amber" ? "var(--warning)" : rag === "red" ? "var(--danger)" : "var(--muted-foreground)";
+  const values = weeklyData.map((d) => d.rate).filter((v) => Number.isFinite(v));
+  const minY = values.length ? Math.floor(Math.min(...values, meta.target) - 1.5) : "auto";
+  const maxY = values.length ? Math.ceil(Math.max(...values, meta.target) + 1.5) : "auto";
 
   return (
     <>
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">KPI</span>
         <Select value={safe} onValueChange={(v) => setActiveKpi(v as KpiCode)}>
-          <SelectTrigger className="h-9 w-72 rounded-full glass">
-            <SelectValue />
-          </SelectTrigger>
+          <SelectTrigger className="h-9 w-72 rounded-full glass"><SelectValue /></SelectTrigger>
           <SelectContent>
             {detected.map((c) => (
               <SelectItem key={c} value={c}>{c} — {KPI_META[c].what}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <Badge variant="secondary" className="ml-auto">{data.length} queues</Badge>
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Queue</span>
+        <Select value={queue} onValueChange={setActiveQueue}>
+          <SelectTrigger className="h-9 w-64 rounded-full glass"><SelectValue placeholder="Select queue" /></SelectTrigger>
+          <SelectContent>
+            {queues.map((q) => (
+              <SelectItem key={q.queue} value={q.queue}>{q.queue} · {q.total} tickets</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Badge variant="secondary" className="ml-auto">{queues.length} queues</Badge>
       </div>
 
-      <Panel title={`${safe} · queue breakdown`} subtitle={meta.what} badge={meta.targetLabel} exportName={`queues_${safe}`}>
-        {top.length === 0
-          ? <Empty message="No queue data for this KPI and period." />
+      <Panel title={`${safe} · ${queue || "—"} · weekly trend`} subtitle={meta.what} badge={meta.targetLabel} exportName={`queue_weekly_${safe}_${queue}`}>
+        {weeklyData.length === 0
+          ? <Empty message="No weekly data for this queue." />
           : (
-            <ResponsiveContainer width="100%" height={Math.max(260, top.length * 36)}>
-              <BarChart data={top} layout="vertical" margin={{ top: 10, right: 24, left: 16, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-                <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${v}%`} />
-                <YAxis type="category" dataKey="queue" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} width={140} />
-                <Tooltip content={<RichTip meta={meta} />} cursor={{ fill: "var(--muted)", opacity: 0.12 }} />
-                <ReferenceLine
-                  x={meta.target}
-                  stroke="var(--success)"
-                  strokeDasharray="5 4"
-                  label={{ value: `target ${meta.targetLabel}`, fontSize: 10, fill: "var(--success)", position: "top" }}
-                />
-                <ReferenceLine
-                  x={amberBound(meta)}
-                  stroke="var(--warning)"
-                  strokeDasharray="2 4"
-                  label={{ value: meta.isKM ? "watch" : "watch", fontSize: 10, fill: "var(--warning)", position: "top" }}
-                />
-                <Bar dataKey="rate" radius={[0, 6, 6, 0]}>
-                  <LabelList dataKey="rate" position="right" formatter={(v: number) => `${v.toFixed(1)}%`} style={{ fill: "var(--foreground)", fontSize: 11, fontWeight: 600 }} />
-                  {top.map((d, i) => (
-                    <Cell key={i} fill={
-                      d.rag === "green" ? "var(--success)"
-                      : d.rag === "amber" ? "var(--warning)"
-                      : d.rag === "red" ? "var(--danger)"
-                      : "var(--muted)"
-                    } />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <>
+              <ResponsiveContainer width="100%" height={260}>
+                <LineChart data={weeklyData} margin={{ top: 26, right: 28, left: 4, bottom: 6 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+                  <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} domain={[minY as number | "auto", maxY as number | "auto"]} />
+                  <Tooltip content={<RichTip meta={meta} />} cursor={{ stroke: "var(--border)", strokeDasharray: "3 3" }} />
+                  <ReferenceLine y={meta.target} stroke="var(--success)" strokeDasharray="5 4" ifOverflow="extendDomain"
+                    label={{ value: `target ${meta.targetLabel}`, fontSize: 10, fill: "var(--success)", position: "insideTopRight" }} />
+                  <ReferenceLine y={amber} stroke="var(--warning)" strokeDasharray="2 4" ifOverflow="extendDomain"
+                    label={{ value: meta.isKM ? "watch ceiling" : "watch floor", fontSize: 10, fill: "var(--warning)", position: "insideBottomRight" }} />
+                  <Line type="monotone" dataKey="rate" stroke={meta.color} strokeWidth={2.5} isAnimationActive={false}
+                    dot={(props: any) => {
+                      const { cx, cy, payload, index } = props;
+                      return <circle key={index} cx={cx} cy={cy} r={5} fill={dotColor(payload.rag)} stroke={meta.color} strokeWidth={1.5} />;
+                    }}
+                    activeDot={{ r: 7 }}>
+                    <LabelList dataKey="rate" position="top" offset={10}
+                      formatter={(v: number) => (Number.isFinite(v) ? `${v.toFixed(1)}%` : "")}
+                      style={{ fontSize: 11, fontWeight: 600, fill: "var(--foreground)" }} />
+                  </Line>
+                </LineChart>
+              </ResponsiveContainer>
+              <WeeklyTable rows={weeklyData} isKM={meta.isKM} />
+            </>
           )}
       </Panel>
 
-      <Panel title="All queues" subtitle="Ranked by ticket volume">
+      <Panel title="All queues for this KPI" subtitle="Ranked by ticket volume — click a row to drill in">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -816,8 +833,8 @@ function QueuesSection({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.map((q) => (
-                <TableRow key={q.queue}>
+              {queues.map((q) => (
+                <TableRow key={q.queue} className={cn("cursor-pointer", q.queue === queue && "bg-primary/5")} onClick={() => setActiveQueue(q.queue)}>
                   <TableCell className="font-medium">{q.queue}</TableCell>
                   <TableCell className="text-right tabular-nums">{q.total.toLocaleString()}</TableCell>
                   <TableCell className="text-right tabular-nums">{q.breaches.toLocaleString()}</TableCell>
@@ -827,7 +844,7 @@ function QueuesSection({
                   <TableCell className="text-right"><RagBadge rag={q.rag} isKM={meta.isKM} /></TableCell>
                 </TableRow>
               ))}
-              {data.length === 0 && (
+              {queues.length === 0 && (
                 <TableRow><TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">No queues for this filter.</TableCell></TableRow>
               )}
             </TableBody>
