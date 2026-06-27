@@ -1,53 +1,32 @@
-## Why tab clicks feel laggy
+## Diagnosis
 
-Radix `Tabs` unmounts the inactive tab and remounts the new one. Each section (Overview, Trends, Queues, PCms, Quality) mounts **~10+ Recharts `ResponsiveContainer` trees in the same task** as the click handler, so the `mousedown` blocks for ~200 ms while React + Recharts walk every chart, measure SVGs, and run their internal `ResizeObserver` setup.
+The freeze only on GitHub Pages (production build) after 2–3 clicks is caused by the `KeepAliveTab` pattern we added last turn:
 
-The compute layer is already cached (previous turn) — this is purely render cost on tab change.
+- Each visited tab is `forceMount`-ed and Radix simply sets `hidden` on inactive panels.
+- Every `ResponsiveContainer` inside those hidden panels still mounts a `ResizeObserver`. In a hidden subtree it measures `0×0`, and Recharts re-runs layout on each resize callback.
+- After 2–3 tab visits there are 10–20 of these observers all firing on every layout pass. In dev/preview React's slower path and StrictMode double-render mask it; the minified prod build on Pages tightens the loop into a freeze with no console error (Chrome silently swallows `ResizeObserver loop completed with undelivered notifications`).
 
-## Fix: defer chart mounting one frame after the tab opens
+Local + Lovable preview "work" because they run the dev build with HMR overlay and StrictMode, which throttle the loop. The Pages bundle is the same code; the runtime characteristics differ.
 
-Add a single tiny utility and apply it where the cost actually lives. No layout or visual changes.
+## Fix
 
-### 1. `src/components/DeferredMount.tsx` (new)
+Drop keep-alive entirely and instead make tab switches cheap by deferring heavy work, not by hoarding mounted charts.
 
-```tsx
-export function DeferredMount({ children, fallback }: { children: React.ReactNode; fallback?: React.ReactNode }) {
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setReady(true));
-    return () => cancelAnimationFrame(id);
-  }, []);
-  return <>{ready ? children : (fallback ?? <div className="h-[240px] animate-pulse rounded bg-secondary/30" />)}</>;
-}
-```
+1. **`src/routes/index.tsx`**
+   - Remove `KeepAliveTab` and the `visited` `Set` state. Replace each `<KeepAliveTab …>` with a plain `<TabsContent value="…">`.
+   - Wrap each tab section's body in `<DeferredMount>` so the chart subtree mounts one animation frame after the tab header paints (we already have this component). This keeps the `mousedown`/tab-switch handler under the 50ms budget.
+   - Keep the per-section `React.memo` and the `dsCache` in `compute.ts` — re-mounting is now O(layout) only, since aggregation is cached.
 
-Effect: the tab swap commits instantly with placeholders; charts paint on the next frame, so the click handler returns in <50 ms.
+2. **`src/components/DeferredMount.tsx`** — no change needed; already renders a skeleton then swaps in children on next frame.
 
-### 2. Wrap chart bodies inside `Panel` children (one section at a time)
-
-Touch only `src/routes/index.tsx`. In each of `MonthlySection`, `WeeklySection`, `QueuesSection`, `PcmsSection`, `QualityReopenSection`, wrap the `<ResponsiveContainer>…</ResponsiveContainer>` block (and the companion `WeeklyTable` where it sits next to a chart) with `<DeferredMount>`. The surrounding `Panel` header, export menu, and selectors render immediately so the UI feels live.
-
-KPI tiles in Overview stay as-is — their sparklines are cheap; the real cost is the big chart panels.
-
-### 3. Memoize section roots
-
-Wrap `MonthlySection`, `WeeklySection`, `QueuesSection`, `PcmsSection`, `QualityReopenSection` in `React.memo`. Props (`ds`, `detected`, `month`) are stable references between tab switches, so the second visit to a tab will skip re-rendering subtrees that didn't change.
-
-### 4. Keep tab unmounting (don't `forceMount`)
-
-`forceMount`-ing all tabs would mount every chart on first dashboard render and make the *initial* load worse — the current symptom would just move from "tab click slow" to "first paint after upload slow". The deferred-mount approach keeps memory low and spreads work across frames.
-
-## Out of scope
-- No compute changes (cache layer from previous turn already covers it).
-- No styling, layout, or export behavior changes.
-- No Recharts replacement.
+3. **No business-logic changes.** Aggregation, parsing, KPI math, exports all untouched.
 
 ## Verification
-1. Upload the 15 MB SLA + PCms + Exclusions.
-2. Click each top tab in turn — expect the active tab content to swap immediately with a brief skeleton, then charts to render within ~1 frame.
-3. Console should no longer show `mousedown` violations on tab switch (a one-off `requestAnimationFrame` warning is fine and expected).
-4. Confirm numbers and exports still match.
 
-## Files touched
-- `src/components/DeferredMount.tsx` (new, ~12 lines)
-- `src/routes/index.tsx` (wrap chart bodies; `React.memo` five section components)
+- Build with `bunx vite build --config vite.config.pages.ts` and serve `dist/` locally with `npx serve` under the `/kpi-insights-hub/` base.
+- Drive Playwright headless, upload one SLA workbook, then click Overview → Monthly → Weekly → Queues → Quality → Overview → Monthly six more times. Record `performance.now()` around each click and confirm INP stays < 200ms and the page remains interactive (button click after the loop succeeds within 100ms).
+- Watch `chrome://tracing`-style violations in the script's console capture; expect no further `setTimeout 80ms+` or `mousedown 200ms+` warnings after the first chart mount.
+
+## Why this is the right call
+
+Keep-alive trades remount cost for permanent observer cost. With our cache in `compute.ts`, remount is cheap; the observer leak is what actually breaks the page. Removing it eliminates the freeze without bringing back the original "click feels heavy" symptom, because `DeferredMount` already spreads the remount across a frame.

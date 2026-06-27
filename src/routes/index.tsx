@@ -526,10 +526,6 @@ function Analysis({
     [ds],
   );
   const [activeTab, setActiveTab] = useState<string>("overview");
-  const [visited, setVisited] = useState<Set<string>>(() => new Set(["overview"]));
-  useEffect(() => {
-    setVisited((prev) => (prev.has(activeTab) ? prev : new Set(prev).add(activeTab)));
-  }, [activeTab]);
 
 
   return (
@@ -558,28 +554,28 @@ function Analysis({
           {ds.pcms.length > 0 && <TabTrigger value="ksl5b" icon={Users}>KSL-5b Detail</TabTrigger>}
         </TabsList>
 
-        <KeepAliveTab value="overview" visited={visited} className="space-y-6">
+        <TabsContent value="overview" className="space-y-6">
           <OverviewSection ds={ds} month={month} detected={detectedKpis} />
-        </KeepAliveTab>
-        <KeepAliveTab value="monthly" visited={visited} className="space-y-6">
+        </TabsContent>
+        <TabsContent value="monthly" className="space-y-6">
           <MonthlySection ds={ds} detected={detectedKpis} />
-        </KeepAliveTab>
-        <KeepAliveTab value="weekly" visited={visited} className="space-y-6">
+        </TabsContent>
+        <TabsContent value="weekly" className="space-y-6">
           <WeeklySection ds={ds} detected={detectedKpis} />
-        </KeepAliveTab>
-        <KeepAliveTab value="queues" visited={visited} className="space-y-6">
+        </TabsContent>
+        <TabsContent value="queues" className="space-y-6">
           <QueuesSection ds={ds} month={month} detected={detectedKpis} activeKpi={activeKpi} setActiveKpi={setActiveKpi} />
-        </KeepAliveTab>
-        <KeepAliveTab value="excl" visited={visited} className="space-y-6">
+        </TabsContent>
+        <TabsContent value="excl" className="space-y-6">
           <ExclusionSection ds={ds} month={month} detected={detectedKpis} />
-        </KeepAliveTab>
-        <KeepAliveTab value="quality" visited={visited} className="space-y-6">
+        </TabsContent>
+        <TabsContent value="quality" className="space-y-6">
           <QualityReopenSection ds={ds} month={month} detected={detectedKpis} />
-        </KeepAliveTab>
+        </TabsContent>
         {ds.pcms.length > 0 && (
-          <KeepAliveTab value="ksl5b" visited={visited} className="space-y-6">
+          <TabsContent value="ksl5b" className="space-y-6">
             <Ksl5bDetail ds={ds} month={month} />
-          </KeepAliveTab>
+          </TabsContent>
         )}
       </Tabs>
 
@@ -616,29 +612,6 @@ function TabTrigger({ value, icon: Icon, children }: { value: string; icon: type
   );
 }
 
-/**
- * Keep-alive tab panel: once a tab is visited, force-mount it so its heavy
- * chart subtree never unmounts when the user switches tabs. Radix hides
- * inactive panels via the `hidden` attribute, so they cost nothing to render.
- */
-function KeepAliveTab({
-  value,
-  visited,
-  className,
-  children,
-}: {
-  value: string;
-  visited: Set<string>;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  if (!visited.has(value)) return null;
-  return (
-    <TabsContent value={value} forceMount className={className}>
-      {children}
-    </TabsContent>
-  );
-}
 
 
 /* ─────────────────────────────────────────────────────── OVERVIEW */
