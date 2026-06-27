@@ -196,7 +196,7 @@ const SLOT_META: Record<Slot, { title: string; desc: string; required?: boolean;
 };
 
 function UploadHero({
-  files, onAdd, onRemove, onRun, canRun, busy, report, override, setOverride,
+  files, onAdd, onRemove, onRun, canRun, busy, report, exclMappings, override, setOverride,
 }: {
   files: Record<Slot, LoadedFile[]>;
   onAdd: (slot: Slot, list: FileList | File[]) => void;
@@ -205,6 +205,7 @@ function UploadHero({
   canRun: boolean;
   busy: boolean;
   report: ValidationReport | null;
+  exclMappings: SheetMapping[];
   override: boolean;
   setOverride: (v: boolean) => void;
 }) {
@@ -239,6 +240,8 @@ function UploadHero({
       </div>
 
       {report && <ValidationPanel report={report} override={override} setOverride={setOverride} />}
+      {exclMappings.length > 0 && <ExclusionMappingPreview mappings={exclMappings} />}
+
 
       <div className="mt-10 flex flex-col items-center justify-center gap-2">
         <Button
