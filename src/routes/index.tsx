@@ -19,9 +19,7 @@ import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 
 import { KPI_META, KPI_ORDER, ragLabel, type KpiCode } from "@/lib/analyzer/kpi";
-import {
-  buildDataset, readWorkbook, type Dataset,
-} from "@/lib/analyzer/parse";
+import type { Dataset } from "@/lib/analyzer/parse";
 import {
   exclusionImpact, monthLabel, monthlySummary, overallByKpi, queueBreakdown,
   rawOverallByKpi, weekLabel, weeklySummary, weeklyQueueSummary,
@@ -30,7 +28,8 @@ import { exportDatasetWorkbook } from "@/lib/analyzer/export";
 import { ExportMenu } from "@/components/ExportMenu";
 import { DeferredMount } from "@/components/DeferredMount";
 import { PCMS_CATEGORIES, pcmsTopAgents, pcmsWeeklyCounts } from "@/lib/analyzer/parsePcms";
-import { buildReport, buildExclMappings, type ValidationReport, type ValidationIssue, type SheetMapping } from "@/lib/analyzer/validate";
+import type { ValidationReport, ValidationIssue, SheetMapping } from "@/lib/analyzer/validate";
+import type { WorkerInput, WorkerOutput } from "@/lib/analyzer/worker";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
