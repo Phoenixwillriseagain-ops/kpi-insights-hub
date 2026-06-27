@@ -24,18 +24,19 @@ export function ExportMenu({ targetRef, name }: {
         <Button
           variant="ghost"
           size="icon"
-          aria-label="Export chart"
-          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+          aria-label="Export chart as image"
+          title="Export chart as PNG or JPEG"
+          className="h-7 w-7 text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/50"
         >
-          <Download className="h-3.5 w-3.5" />
+          <Download className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-40">
         <DropdownMenuItem onClick={() => doExport("png")}>
-          <FileImage className="mr-2 h-4 w-4" /> PNG image
+          <FileImage className="mr-2 h-4 w-4" aria-hidden="true" /> PNG image
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => doExport("jpeg")}>
-          <FileText className="mr-2 h-4 w-4" /> JPEG image
+          <FileText className="mr-2 h-4 w-4" aria-hidden="true" /> JPEG image
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
