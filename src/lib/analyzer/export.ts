@@ -29,14 +29,45 @@ export async function exportNodeAsImage(
   name: string,
   fmt: "png" | "jpeg" = "png",
 ) {
+  // Temporarily expand scrollable descendants so html-to-image doesn't bake
+  // scrollbars or clipped rows into the snapshot, and force header chips
+  // (target ≤ 5%, etc.) to render on a single line.
+  const mutated: { el: HTMLElement; prev: string }[] = [];
+  const stash = (el: HTMLElement, css: Partial<CSSStyleDeclaration>) => {
+    mutated.push({ el, prev: el.getAttribute("style") ?? "" });
+    Object.assign(el.style, css);
+  };
+  node.querySelectorAll<HTMLElement>("*").forEach((el) => {
+    const cs = getComputedStyle(el);
+    const scrolls =
+      /(auto|scroll)/.test(cs.overflowX) ||
+      /(auto|scroll)/.test(cs.overflowY) ||
+      el.scrollHeight > el.clientHeight + 1 ||
+      el.scrollWidth > el.clientWidth + 1;
+    if (scrolls) {
+      stash(el, { overflow: "visible", maxHeight: "none", maxWidth: "none", height: "auto" });
+    }
+  });
+  node.querySelectorAll<HTMLElement>("[data-export-nowrap]").forEach((el) => {
+    stash(el, { whiteSpace: "nowrap" });
+  });
+
   const opts = {
     cacheBust: true,
     pixelRatio: 2,
     backgroundColor: getComputedStyle(document.body).backgroundColor || "#ffffff",
+    style: { overflow: "visible" } as Partial<CSSStyleDeclaration>,
   };
-  const dataUrl = fmt === "png" ? await toPng(node, opts) : await toJpeg(node, { ...opts, quality: 0.95 });
-  const safe = name.replace(/[^a-z0-9_-]+/gi, "_").toLowerCase();
-  download(dataUrl, `pulse_${safe}_${stamp()}.${fmt === "jpeg" ? "jpg" : "png"}`);
+  try {
+    const dataUrl = fmt === "png" ? await toPng(node, opts) : await toJpeg(node, { ...opts, quality: 0.95 });
+    const safe = name.replace(/[^a-z0-9_-]+/gi, "_").toLowerCase();
+    download(dataUrl, `pulse_${safe}_${stamp()}.${fmt === "jpeg" ? "jpg" : "png"}`);
+  } finally {
+    mutated.forEach(({ el, prev }) => {
+      if (prev) el.setAttribute("style", prev);
+      else el.removeAttribute("style");
+    });
+  }
 }
 
 export function exportDatasetWorkbook(ds: Dataset, month: string | null) {
