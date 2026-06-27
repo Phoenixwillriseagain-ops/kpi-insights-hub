@@ -13,7 +13,7 @@ import { routeTree } from "./routeTree.gen";
 //    but TanStack Router needs the actual path prefix for routing to work.
 const getBasepath = (): string => {
   if (typeof window === "undefined" || typeof document === "undefined") {
-    return "/";
+     return "/kpi-insights-hub/";
   }
 
   try {
