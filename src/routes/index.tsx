@@ -1113,8 +1113,9 @@ function QualityReopenSection({ ds, month, detected }: { ds: Dataset; month: str
   return (
     <>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {codes.map((c) => <KpiTile key={c} ds={ds} code={c} month={month} />)}
+        {codes.map((c) => <ExportableTile key={c} ds={ds} code={c} month={month} />)}
       </div>
+
 
       {codes.map((code) => {
         const meta = KPI_META[code];
