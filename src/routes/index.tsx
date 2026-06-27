@@ -1337,7 +1337,7 @@ const QualityReopenSection = React.memo(function QualityReopenSection({ ds, mont
       })}
     </>
   );
-}
+});
 
 /* ─────────────────────────────────────────────────── KSL-5b DETAIL (PCms) */
 
