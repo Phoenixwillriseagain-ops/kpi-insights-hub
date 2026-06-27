@@ -6,7 +6,7 @@ import {
   Sparkles, Sun, Target, TrendingUp, Upload, Users, X,
 } from "lucide-react";
 import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, ComposedChart, LabelList, Legend, Line, LineChart,
+  Bar, BarChart, CartesianGrid, ComposedChart, LabelList, Legend, Line, LineChart,
   ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 
@@ -719,19 +719,9 @@ const KpiTile = React.memo(function KpiTile({ ds, code, month }: { ds: Dataset; 
             </p>
           )}
         </div>
-        <div className="h-10 w-24">
+        <div className="h-10 w-24" aria-hidden="true">
           {trend.length > 1 ? (
-            <ResponsiveContainer>
-              <AreaChart data={trend}>
-                <defs>
-                  <linearGradient id={`spark-${code}`} x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor={meta.color} stopOpacity={0.55} />
-                    <stop offset="100%" stopColor={meta.color} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <Area dataKey="rate" stroke={meta.color} strokeWidth={1.5} fill={`url(#spark-${code})`} type="monotone" dot={false} isAnimationActive={false} />
-              </AreaChart>
-            </ResponsiveContainer>
+            <Sparkline data={trend} color={meta.color} gradientId={`spark-${code}`} />
           ) : <div className="h-full rounded bg-secondary/40" />}
         </div>
       </div>
@@ -742,6 +732,37 @@ const KpiTile = React.memo(function KpiTile({ ds, code, month }: { ds: Dataset; 
     </div>
   );
 });
+
+function Sparkline({ data, color, gradientId }: { data: Array<{ rate: number }>; color: string; gradientId: string }) {
+  const points = useMemo(() => {
+    const w = 96;
+    const h = 40;
+    const pad = 3;
+    const values = data.map((d) => d.rate).filter((v) => Number.isFinite(v));
+    const min = values.length ? Math.min(...values) : 0;
+    const max = values.length ? Math.max(...values) : 100;
+    const span = Math.max(max - min, 1);
+    return data.map((d, i) => {
+      const x = data.length === 1 ? w / 2 : pad + (i / (data.length - 1)) * (w - pad * 2);
+      const y = h - pad - ((d.rate - min) / span) * (h - pad * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(" ");
+  }, [data]);
+
+  const area = points ? `0,40 ${points} 96,40` : "";
+  return (
+    <svg className="pointer-events-none h-full w-full" viewBox="0 0 96 40" focusable="false" role="presentation">
+      <defs>
+        <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {area && <polygon points={area} fill={`url(#${gradientId})`} />}
+      <polyline points={points} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 
 function RagBadge({ rag, isKM }: { rag: "green" | "amber" | "red" | "none"; isKM: boolean }) {
