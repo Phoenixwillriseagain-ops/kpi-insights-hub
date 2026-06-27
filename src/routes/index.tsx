@@ -10,34 +10,33 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Upload SLA file · KPI Dashboard" },
-      { name: "description", content: "Upload your weekly SLA Excel file to explore KPI compliance, trends, and per-queue breakdowns." },
+      { name: "description", content: "Upload your monthly SLA Excel file to explore KPI compliance, weekly trends, and per-queue breakdowns." },
       { property: "og:title", content: "Upload SLA file · KPI Dashboard" },
-      { property: "og:description", content: "Drop your SLA workbook to see KSL/KM KPI trends." },
+      { property: "og:description", content: "Drop your SLA workbook to see KSL/KM KPI trends — Before and After exclusion side-by-side." },
     ],
   }),
   component: UploadPage,
 });
 
 function UploadPage() {
-  const { main, mainName, exclusion, exclusionName, setMain, setExclusion } = useData();
-  const [busy, setBusy] = useState<"main" | "exclusion" | null>(null);
+  const { workbook, setWorkbook } = useData();
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  async function handle(file: File, kind: "main" | "exclusion") {
+  async function handle(file: File) {
     setError(null);
-    setBusy(kind);
+    setBusy(true);
     try {
       const wb = await parseWorkbookFile(file);
-      if (wb.rows.length === 0) {
-        throw new Error("No rows detected. Check that the file has Queue, ISO_Language, and a date/week column.");
+      if (wb.records.length === 0) {
+        throw new Error("No rows detected. The workbook should contain sheets named KSL-1, KSL-2a, …, KM-1, KM-2 with columns DATE_CLOSE, Queue, ISO_Language, Breach_Description, Excluded.");
       }
-      if (kind === "main") setMain(wb, file.name);
-      else setExclusion(wb, file.name);
-    } catch (e: any) {
-      setError(e?.message ?? "Failed to parse file");
+      setWorkbook(wb);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to parse file");
     } finally {
-      setBusy(null);
+      setBusy(false);
     }
   }
 
@@ -47,44 +46,40 @@ function UploadPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Upload your data</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Files are parsed entirely in your browser. Nothing is uploaded or stored anywhere.
+          The dashboard reads one workbook with one sheet per KPI; the per-row <code>Excluded</code> flag drives the
+          Before / After exclusion comparison shown everywhere.
         </p>
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        <FileDrop
-          label="Main SLA file"
-          hint=".xlsx with columns Queue, ISO_Language, date/week, plus KPI breach indicators"
-          fileName={mainName}
-          onFile={(f) => handle(f, "main")}
-        />
-        <FileDrop
-          label="Exclusion file (optional)"
-          hint="Same shape as main; toggled via the 'Before / After excl.' switch"
-          fileName={exclusionName}
-          onFile={(f) => handle(f, "exclusion")}
-        />
-      </div>
-      {busy && <p className="mt-4 text-sm text-muted-foreground">Parsing {busy} file…</p>}
+
+      <FileDrop
+        label="SLA workbook (.xlsx)"
+        hint="Sheets named KSL-1 … KSL-6, KM-1, KM-2. Required columns: DATE_CLOSE, Queue, ISO_Language, Breach_Description, Excluded."
+        fileName={workbook?.fileName ?? null}
+        onFile={handle}
+      />
+
+      {busy && <p className="mt-4 text-sm text-muted-foreground">Parsing workbook…</p>}
       {error && (
         <div className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
           {error}
         </div>
       )}
-      {main && (
+
+      {workbook && (
         <div className="mt-8 rounded-2xl border border-border bg-card p-5">
-          <h2 className="text-sm font-semibold">Detected in main file</h2>
-          <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-muted-foreground sm:grid-cols-4">
-            <div><dt className="text-foreground">Rows</dt><dd>{main.rows.length.toLocaleString()}</dd></div>
-            <div><dt className="text-foreground">Weeks</dt><dd>{main.weeks.length}</dd></div>
-            <div><dt className="text-foreground">Markets</dt><dd>{main.markets.length}</dd></div>
-            <div><dt className="text-foreground">Queues</dt><dd>{main.queues.length}</dd></div>
-            <div><dt className="text-foreground">Queue col</dt><dd>{main.detectedColumns.queue ?? "—"}</dd></div>
-            <div><dt className="text-foreground">Market col</dt><dd>{main.detectedColumns.market ?? "—"}</dd></div>
-            <div><dt className="text-foreground">Date col</dt><dd>{main.detectedColumns.date ?? "—"}</dd></div>
+          <h2 className="text-sm font-semibold">Detected</h2>
+          <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-xs sm:grid-cols-4">
+            <div><dt className="text-muted-foreground">Rows</dt><dd className="font-medium">{workbook.records.length.toLocaleString()}</dd></div>
+            <div><dt className="text-muted-foreground">KPI sheets</dt><dd className="font-medium">{workbook.kpisFound.length}</dd></div>
+            <div><dt className="text-muted-foreground">Weeks</dt><dd className="font-medium">{workbook.weeks.length}</dd></div>
+            <div><dt className="text-muted-foreground">Markets</dt><dd className="font-medium">{workbook.markets.length}</dd></div>
+            <div><dt className="text-muted-foreground">Queues</dt><dd className="font-medium">{workbook.queues.length}</dd></div>
+            <div className="col-span-2 sm:col-span-3"><dt className="text-muted-foreground">KPIs found</dt><dd className="font-medium">{workbook.kpisFound.join(", ")}</dd></div>
           </dl>
-          <div className="mt-4 flex gap-2">
-            <Button onClick={() => navigate({ to: "/overview" })}>Go to Overview</Button>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button onClick={() => navigate({ to: "/overview" })}>Overview</Button>
             <Button variant="secondary" onClick={() => navigate({ to: "/trend" })}>6-Week Trend</Button>
-            <Button variant="secondary" onClick={() => navigate({ to: "/queues" })}>Per Queue</Button>
+            <Button variant="secondary" onClick={() => navigate({ to: "/queues" })}>Per Queue / Market</Button>
           </div>
         </div>
       )}
