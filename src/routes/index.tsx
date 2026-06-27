@@ -1020,16 +1020,28 @@ function withDeltas<T extends { rate: number }>(rows: T[]): (T & { prev: number 
 /* ─────────────────────────────────────────────────── KSL-5b DETAIL (PCms) */
 
 function Ksl5bDetail({ ds, month }: { ds: Dataset; month: string | null }) {
-  // Filter PCms rows by selected month (match either monthKey or monthName)
-  const scoped = useMemo(() => {
+  // Filter PCms rows by selected month
+  const scopedByMonth = useMemo(() => {
     if (!month) return ds.pcms;
     return ds.pcms.filter((r) => r.monthKey === month);
   }, [ds.pcms, month]);
 
+  // Week list available in current month scope
+  const availableWeeks = useMemo(() => {
+    const s = new Set<string>();
+    scopedByMonth.forEach((r) => { if (r.weekKey) s.add(r.weekKey); });
+    return [...s].sort();
+  }, [scopedByMonth]);
+
+  const [activeWeek, setActiveWeek] = useState<string>("all");
+  const scoped = useMemo(() => {
+    if (activeWeek === "all") return scopedByMonth;
+    return scopedByMonth.filter((r) => r.weekKey === activeWeek);
+  }, [scopedByMonth, activeWeek]);
+
   const [activeCat, setActiveCat] = useState<number | null>(null);
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [normalize, setNormalize] = useState(false);
 
   const filtered = useMemo(() => {
     return scoped.filter((r) =>
@@ -1039,9 +1051,22 @@ function Ksl5bDetail({ ds, month }: { ds: Dataset; month: string | null }) {
     );
   }, [scoped, activeCat, activeAgent, search]);
 
-  const stack = useMemo(() => pcmsByCategory(filtered), [filtered]);
+  // Reason mix — sorted horizontal bar of category totals, split KO/NOK
+  const reasonMix = useMemo(() => {
+    const map = new Map<number, { id: number; label: string; color: string; ko: number; nok: number; total: number }>();
+    PCMS_CATEGORIES.forEach((c) => map.set(c.id, { id: c.id, label: `${c.id}. ${c.label}`, color: c.color, ko: 0, nok: 0, total: 0 }));
+    filtered.forEach((r) => {
+      const m = map.get(r.category);
+      if (!m) return;
+      if (r.status === "KO") m.ko += 1;
+      else if (r.status === "NOK") m.nok += 1;
+      m.total += 1;
+    });
+    return [...map.values()].filter((m) => m.total > 0).sort((a, b) => b.total - a.total);
+  }, [filtered]);
+
   const agents = useMemo(() => pcmsTopAgents(filtered, 10), [filtered]);
-  const weekly = useMemo(() => pcmsWeeklyCounts(filtered), [filtered]);
+  const weekly = useMemo(() => pcmsWeeklyCounts(scopedByMonth), [scopedByMonth]);
   const ksl5bWeekly = useMemo(
     () => weeklySummary(ds, "KSL-5b", { lastN: 12 }).map((p) => ({ ...p, label: weekLabel(p.label), weekKey: p.label })),
     [ds],
@@ -1051,26 +1076,21 @@ function Ksl5bDetail({ ds, month }: { ds: Dataset; month: string | null }) {
     return ksl5bWeekly.map((w) => ({ ...w, koCount: koMap.get(w.weekKey) ?? 0 }));
   }, [ksl5bWeekly, weekly]);
 
-  // Normalized stack to 100%
-  const stackData = useMemo(() => {
-    if (!normalize) return stack;
-    return stack.map((r) => {
-      const total = (r as any).total as number;
-      if (!total) return r;
-      const out: any = { label: r.label, total };
-      PCMS_CATEGORIES.forEach((c) => {
-        const v = (r as any)[`cat_${c.id}`] ?? 0;
-        out[`cat_${c.id}`] = total ? (v / total) * 100 : 0;
-      });
-      return out;
-    });
-  }, [stack, normalize]);
-
   const ksl5bMeta = KPI_META["KSL-5b"];
 
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Week</span>
+        <Select value={activeWeek} onValueChange={setActiveWeek}>
+          <SelectTrigger className="h-8 w-44 rounded-full glass"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All weeks{month ? " in month" : ""}</SelectItem>
+            {availableWeeks.map((w) => (
+              <SelectItem key={w} value={w}>{weekLabel(w)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Badge variant="secondary" className="text-[10px]">{filtered.length.toLocaleString()} PCms rows</Badge>
         {activeCat != null && (
           <button onClick={() => setActiveCat(null)} className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
@@ -1082,40 +1102,32 @@ function Ksl5bDetail({ ds, month }: { ds: Dataset; month: string | null }) {
             {activeAgent} <X className="h-3 w-3" />
           </button>
         )}
-        {(activeCat != null || activeAgent || search) && (
-          <button onClick={() => { setActiveCat(null); setActiveAgent(null); setSearch(""); }} className="text-[11px] text-muted-foreground underline-offset-2 hover:underline">Clear filters</button>
+        {(activeCat != null || activeAgent || search || activeWeek !== "all") && (
+          <button onClick={() => { setActiveCat(null); setActiveAgent(null); setSearch(""); setActiveWeek("all"); }} className="text-[11px] text-muted-foreground underline-offset-2 hover:underline">Clear filters</button>
         )}
-        <div className="ml-auto flex items-center gap-2 text-[11px]">
-          <label className="inline-flex cursor-pointer items-center gap-1.5">
-            <input type="checkbox" checked={normalize} onChange={(e) => setNormalize(e.target.checked)} className="h-3.5 w-3.5 accent-primary" />
-            100% stacked
-          </label>
-        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <Panel title="Reason mix" subtitle="KO/NOK counts by category" exportName="pcms_reasons">
-          {stackData.length === 0 ? <Empty message="No PCms rows for this filter." /> : (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={stackData} margin={{ top: 12, right: 16, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-                <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => normalize ? `${Math.round(v)}%` : String(v)} />
-                <Tooltip cursor={{ fill: "var(--muted)", opacity: 0.1 }} content={<StackedTip normalize={normalize} />} />
-                <Legend wrapperStyle={{ fontSize: 10 }} iconSize={8} onClick={(e: any) => {
-                  const id = parseInt(String(e.dataKey).replace("cat_", ""), 10);
-                  setActiveCat((c) => c === id ? null : id);
-                }} />
-                {PCMS_CATEGORIES.map((c) => (
-                  <Bar key={c.id} dataKey={`cat_${c.id}`} name={`${c.id}. ${c.label}`} stackId="x" fill={c.color} isAnimationActive={false} />
-                ))}
+        <Panel title="Reason mix" subtitle="KO vs NOK count per reason category — sorted by volume" exportName="pcms_reasons">
+          {reasonMix.length === 0 ? <Empty message="No PCms rows for this filter." /> : (
+            <ResponsiveContainer width="100%" height={Math.max(280, reasonMix.length * 34)}>
+              <BarChart data={reasonMix} layout="vertical" margin={{ top: 6, right: 36, left: 12, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+                <YAxis type="category" dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} width={200} />
+                <Tooltip cursor={{ fill: "var(--muted)", opacity: 0.12 }} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="ko"  name="KO"  stackId="s" fill="var(--danger)" isAnimationActive={false} onClick={(d: any) => setActiveCat((c) => c === d.id ? null : d.id)} />
+                <Bar dataKey="nok" name="NOK" stackId="s" fill="var(--warning)" isAnimationActive={false} onClick={(d: any) => setActiveCat((c) => c === d.id ? null : d.id)}>
+                  <LabelList dataKey="total" position="right" style={{ fill: "var(--foreground)", fontSize: 11, fontWeight: 600 }} />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           )}
         </Panel>
 
-        <Panel title="Top agents by KO/NOK count" subtitle="Click a bar to filter the drill table" exportName="pcms_agents">
-          {agents.length === 0 ? <Empty message="No agent data." /> : (
+        <Panel title={`Top agents by KO/NOK${activeWeek === "all" ? "" : " · " + weekLabel(activeWeek)}`} subtitle="Click a bar to filter the drill table" exportName="pcms_agents">
+          {agents.length === 0 ? <Empty message="No agent data for this filter." /> : (
             <ResponsiveContainer width="100%" height={Math.max(260, agents.length * 32)}>
               <BarChart data={agents} layout="vertical" margin={{ top: 4, right: 24, left: 12, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
@@ -1130,6 +1142,7 @@ function Ksl5bDetail({ ds, month }: { ds: Dataset; month: string | null }) {
           )}
         </Panel>
       </div>
+
 
       <Panel title="KSL-5b weekly trend · PCms overlay" subtitle="Bars = PCms KO/NOK count per week (right axis). Line = KSL-5b conformity %." exportName="pcms_ksl5b_overlay">
         {overlay.length === 0 ? <Empty message="No KSL-5b weekly data." /> : (
