@@ -804,7 +804,7 @@ const MonthlySection = React.memo(function MonthlySection({ ds, detected }: { ds
       })}
     </div>
   );
-}
+});
 
 /* ─────────────────────────────────────────────────── WEEKLY */
 
