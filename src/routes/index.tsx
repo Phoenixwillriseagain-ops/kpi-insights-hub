@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import {
   Bar, BarChart, CartesianGrid, ComposedChart, LabelList, Legend, Line, LineChart,
-  ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  ReferenceLine, Tooltip, XAxis, YAxis,
 } from "recharts";
 
 import { Button } from "@/components/ui/button";
@@ -833,8 +833,8 @@ const MonthlySection = React.memo(function MonthlySection({ ds, detected }: { ds
             {data.length === 0
               ? <Empty message="No monthly data for this KPI." />
               : (
-                <ResponsiveContainer width="100%" height={240}>
-                  <LineChart data={data} margin={{ top: 18, right: 24, left: 0, bottom: 0 }}>
+                <ChartFrame height={240}>{(width) => (
+                  <LineChart width={width} height={240} data={data} margin={{ top: 18, right: 24, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                     <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
                     <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} />
@@ -862,7 +862,7 @@ const MonthlySection = React.memo(function MonthlySection({ ds, detected }: { ds
                       activeDot={{ r: 6 }}
                     />
                   </LineChart>
-                </ResponsiveContainer>
+                )}</ChartFrame>
               )}
           </Panel>
         );
@@ -895,8 +895,8 @@ const WeeklySection = React.memo(function WeeklySection({ ds, detected }: { ds: 
               ? <Empty message="No weekly data for this KPI." />
               : (
                 <>
-                  <ResponsiveContainer width="100%" height={260}>
-                    <LineChart data={data} margin={{ top: 26, right: 28, left: 4, bottom: 6 }}>
+                  <ChartFrame height={260}>{(width) => (
+                    <LineChart width={width} height={260} data={data} margin={{ top: 26, right: 28, left: 4, bottom: 6 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                       <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
                       <YAxis
@@ -940,7 +940,7 @@ const WeeklySection = React.memo(function WeeklySection({ ds, detected }: { ds: 
                         />
                       </Line>
                     </LineChart>
-                  </ResponsiveContainer>
+                  )}</ChartFrame>
                   <WeeklyTable rows={data} isKM={meta.isKM} />
                 </>
               )}
@@ -1049,8 +1049,8 @@ const QueuesSection = React.memo(function QueuesSection({
           ? <Empty message="No weekly data for this queue." />
           : (
             <>
-              <ResponsiveContainer width="100%" height={260}>
-                <LineChart data={weeklyData} margin={{ top: 26, right: 28, left: 4, bottom: 6 }}>
+              <ChartFrame height={260}>{(width) => (
+                <LineChart width={width} height={260} data={weeklyData} margin={{ top: 26, right: 28, left: 4, bottom: 6 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
                   <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} domain={[minY as number | "auto", maxY as number | "auto"]} />
@@ -1070,7 +1070,7 @@ const QueuesSection = React.memo(function QueuesSection({
                       style={{ fontSize: 11, fontWeight: 600, fill: "var(--foreground)" }} />
                   </Line>
                 </LineChart>
-              </ResponsiveContainer>
+              )}</ChartFrame>
               <WeeklyTable rows={weeklyData} isKM={meta.isKM} />
             </>
           )}
@@ -1189,6 +1189,43 @@ function Panel({ title, subtitle, badge, exportName, children }: { title: string
 
 function Empty({ message }: { message: string }) {
   return <p className="py-10 text-center text-xs text-muted-foreground">{message}</p>;
+}
+
+function ChartFrame({
+  height,
+  children,
+}: {
+  height: number;
+  children: (width: number) => React.ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+
+  useEffect(() => {
+    let raf = 0;
+    const measure = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const next = Math.floor(ref.current?.clientWidth ?? 0);
+        if (next > 0) setWidth((current) => (Math.abs(current - next) > 1 ? next : current));
+      });
+    };
+
+    measure();
+    window.addEventListener("resize", measure, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
+
+  return (
+    <div ref={ref} className="w-full" style={{ height }}>
+      {width > 0
+        ? children(width)
+        : <div style={{ height }} className="w-full animate-pulse rounded bg-secondary/30" />}
+    </div>
+  );
 }
 
 
