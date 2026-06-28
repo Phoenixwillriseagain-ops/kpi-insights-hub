@@ -581,7 +581,7 @@ function Analysis({
         ))}
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      <Tabs value={activeTab} onValueChange={(v) => { perfMark("tab switch", `${activeTab} → ${v}`); setActiveTab(v); }} className="space-y-6">
         <TabsList className="glass h-12 w-full justify-start gap-1 rounded-2xl p-1.5">
           <TabTrigger value="overview" icon={BarChart3}>Overview</TabTrigger>
           <TabTrigger value="monthly" icon={LineChartIcon}>Monthly Trend</TabTrigger>
