@@ -15,7 +15,7 @@ function drain() {
   if (queue.length === 0) { draining = false; return; }
   const next = queue.shift()!;
   if (next) next();
-  drain();
+  setTimeout(drain, 50);
 }
 
 /**
