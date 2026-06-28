@@ -218,9 +218,20 @@ export function buildDataset(
   return ds;
 }
 
+const exclSetCache = new WeakMap<Dataset, Map<KpiCode, Set<string>>>();
+
 export function exclSet(ds: Dataset, code: KpiCode): Set<string> {
+  let perDs = exclSetCache.get(ds);
+  if (!perDs) {
+    perDs = new Map();
+    exclSetCache.set(ds, perDs);
+  }
+  let entry = perDs.get(code);
+  if (entry) return entry;
+
   const s = new Set<string>();
   (ds.excl[code] ?? []).forEach((r) => r.ticket && s.add(r.ticket.trim().toLowerCase()));
+  perDs.set(code, s);
   return s;
 }
 
