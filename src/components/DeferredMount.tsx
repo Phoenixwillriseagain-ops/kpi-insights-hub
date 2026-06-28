@@ -1,29 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
-// Global mount queue — serialises DeferredMount activations across the whole
-// component tree with a deliberate gap between each mount so the browser
-// always has time to process user input between frames.
-const queue: Array<() => void> = [];
-let draining = false;
-
-function enqueue(activate: () => void) {
-  queue.push(activate);
-  if (!draining) drain();
-}
-
-function drain() {
-  if (queue.length === 0) { draining = false; return; }
-  const next = queue.shift()!;
-  if (next) next();
-  setTimeout(drain, 50);
-}
-
 /**
- * Renders `fallback` synchronously, then queues `children` to mount
- * one-at-a-time with a 50 ms gap between each activation.
- * This prevents the render avalanche that occurs when many panels mount
- * simultaneously after a dataset is loaded, while keeping the UI interactive
- * throughout the stagger sequence.
+ * Renders `fallback` first, then mounts `children` on the next animation
+ * frame followed by a microtask gap. The pending mount is cancelled if the
+ * component unmounts before activation (e.g. tab switch) so we never call
+ * `setState` on an unmounted node and never leave stale timers behind.
  */
 export function DeferredMount({
   children,
@@ -35,18 +16,21 @@ export function DeferredMount({
   height?: number;
 }) {
   const [ready, setReady] = useState(false);
-  const mounted = useRef(false);
+  const aliveRef = useRef(true);
 
   useEffect(() => {
-    if (mounted.current) return;
-    mounted.current = true;
-    enqueue(() => {
-      setReady(true);
+    aliveRef.current = true;
+    let raf = 0;
+    let t = 0;
+    raf = requestAnimationFrame(() => {
+      t = window.setTimeout(() => {
+        if (aliveRef.current) setReady(true);
+      }, 16);
     });
-    // Flush any remaining queued items when this instance unmounts
-    // (e.g. tab switch before all panels have loaded).
     return () => {
-      mounted.current = false;
+      aliveRef.current = false;
+      cancelAnimationFrame(raf);
+      clearTimeout(t);
     };
   }, []);
 
