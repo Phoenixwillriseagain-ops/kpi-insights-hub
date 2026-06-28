@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import {
   Bar, BarChart, CartesianGrid, ComposedChart, LabelList, Legend, Line, LineChart,
-  ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  ReferenceLine, Tooltip, XAxis, YAxis,
 } from "recharts";
 
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,7 @@ import { PCMS_CATEGORIES, pcmsTopAgents, pcmsWeeklyCounts } from "@/lib/analyzer
 import type { ValidationReport, ValidationIssue, SheetMapping } from "@/lib/analyzer/validate";
 import type { WorkerInput, WorkerOutput } from "@/lib/analyzer/worker";
 import { PerfPanel } from "@/components/PerfPanel";
-import { perfMark, perfMeasure, installLongTaskObserver } from "@/lib/perf";
+import { perfMark, perfMeasure } from "@/lib/perf";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")(
@@ -135,12 +135,6 @@ const toggleTheme = () => {
       toast.error("Analysis failed", { description: e instanceof Error ? e.message : String(e) });
     } finally { setBusy(false); }
   };
-
-  // Install long-task observer once so the perf panel can flag main-thread
-  // blocks (>50 ms) regardless of where they originate.
-  useEffect(() => { installLongTaskObserver(); }, []);
-
-
 
   const reset = () => { setDataset(null); setFiles({ sla: [], breach: [], excl: [] }); setReport(null); setOverride(false); setExclMappings([]); };
 
@@ -833,8 +827,8 @@ const MonthlySection = React.memo(function MonthlySection({ ds, detected }: { ds
             {data.length === 0
               ? <Empty message="No monthly data for this KPI." />
               : (
-                <ResponsiveContainer width="100%" height={240}>
-                  <LineChart data={data} margin={{ top: 18, right: 24, left: 0, bottom: 0 }}>
+                <ChartFrame height={240}>{(width) => (
+                  <LineChart width={width} height={240} data={data} margin={{ top: 18, right: 24, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                     <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
                     <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} />
@@ -862,7 +856,7 @@ const MonthlySection = React.memo(function MonthlySection({ ds, detected }: { ds
                       activeDot={{ r: 6 }}
                     />
                   </LineChart>
-                </ResponsiveContainer>
+                )}</ChartFrame>
               )}
           </Panel>
         );
@@ -895,8 +889,8 @@ const WeeklySection = React.memo(function WeeklySection({ ds, detected }: { ds: 
               ? <Empty message="No weekly data for this KPI." />
               : (
                 <>
-                  <ResponsiveContainer width="100%" height={260}>
-                    <LineChart data={data} margin={{ top: 26, right: 28, left: 4, bottom: 6 }}>
+                  <ChartFrame height={260}>{(width) => (
+                    <LineChart width={width} height={260} data={data} margin={{ top: 26, right: 28, left: 4, bottom: 6 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                       <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
                       <YAxis
@@ -940,7 +934,7 @@ const WeeklySection = React.memo(function WeeklySection({ ds, detected }: { ds: 
                         />
                       </Line>
                     </LineChart>
-                  </ResponsiveContainer>
+                  )}</ChartFrame>
                   <WeeklyTable rows={data} isKM={meta.isKM} />
                 </>
               )}
@@ -1049,8 +1043,8 @@ const QueuesSection = React.memo(function QueuesSection({
           ? <Empty message="No weekly data for this queue." />
           : (
             <>
-              <ResponsiveContainer width="100%" height={260}>
-                <LineChart data={weeklyData} margin={{ top: 26, right: 28, left: 4, bottom: 6 }}>
+              <ChartFrame height={260}>{(width) => (
+                <LineChart width={width} height={260} data={weeklyData} margin={{ top: 26, right: 28, left: 4, bottom: 6 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
                   <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} domain={[minY as number | "auto", maxY as number | "auto"]} />
@@ -1070,7 +1064,7 @@ const QueuesSection = React.memo(function QueuesSection({
                       style={{ fontSize: 11, fontWeight: 600, fill: "var(--foreground)" }} />
                   </Line>
                 </LineChart>
-              </ResponsiveContainer>
+              )}</ChartFrame>
               <WeeklyTable rows={weeklyData} isKM={meta.isKM} />
             </>
           )}
@@ -1191,6 +1185,43 @@ function Empty({ message }: { message: string }) {
   return <p className="py-10 text-center text-xs text-muted-foreground">{message}</p>;
 }
 
+function ChartFrame({
+  height,
+  children,
+}: {
+  height: number;
+  children: (width: number) => React.ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+
+  useEffect(() => {
+    let raf = 0;
+    const measure = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const next = Math.floor(ref.current?.clientWidth ?? 0);
+        if (next > 0) setWidth((current) => (Math.abs(current - next) > 1 ? next : current));
+      });
+    };
+
+    measure();
+    window.addEventListener("resize", measure, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
+
+  return (
+    <div ref={ref} className="w-full" style={{ height }}>
+      {width > 0
+        ? children(width)
+        : <div style={{ height }} className="w-full animate-pulse rounded bg-secondary/30" />}
+    </div>
+  );
+}
+
 
 function RichTip({ active, payload, label, meta }: any) {
   if (!active || !payload?.length) return null;
@@ -1309,8 +1340,8 @@ const QualityReopenSection = React.memo(function QualityReopenSection({ ds, mont
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
               <Panel title={`${code} · monthly trend`} subtitle={meta.what} badge={meta.targetLabel} exportName={`quality_monthly_${code}`}>
                 {monthly.length === 0 ? <Empty message="No monthly data." /> : (
-                  <ResponsiveContainer width="100%" height={240}>
-                    <LineChart data={monthly} margin={{ top: 22, right: 24, left: 0, bottom: 0 }}>
+                  <ChartFrame height={240}>{(width) => (
+                    <LineChart width={width} height={240} data={monthly} margin={{ top: 22, right: 24, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                       <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
                       <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} />
@@ -1330,15 +1361,15 @@ const QualityReopenSection = React.memo(function QualityReopenSection({ ds, mont
                           style={{ fontSize: 11, fontWeight: 600, fill: "var(--foreground)" }} />
                       </Line>
                     </LineChart>
-                  </ResponsiveContainer>
+                  )}</ChartFrame>
                 )}
               </Panel>
 
               <Panel title={`${code} · last 6 weeks`} subtitle={meta.what} badge={meta.targetLabel} exportName={`quality_weekly_${code}`}>
                 {weekly.length === 0 ? <Empty message="No weekly data." /> : (
                   <>
-                    <ResponsiveContainer width="100%" height={260}>
-                      <LineChart data={weekly} margin={{ top: 26, right: 28, left: 4, bottom: 6 }}>
+                    <ChartFrame height={260}>{(width) => (
+                      <LineChart width={width} height={260} data={weekly} margin={{ top: 26, right: 28, left: 4, bottom: 6 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                         <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
                         <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} domain={[minY as number | "auto", maxY as number | "auto"]} />
@@ -1358,7 +1389,7 @@ const QualityReopenSection = React.memo(function QualityReopenSection({ ds, mont
                             style={{ fontSize: 11, fontWeight: 600, fill: "var(--foreground)" }} />
                         </Line>
                       </LineChart>
-                    </ResponsiveContainer>
+                    )}</ChartFrame>
                     <WeeklyTable rows={weekly} isKM={meta.isKM} />
                   </>
                 )}
@@ -1494,8 +1525,8 @@ const Ksl5bDetail = React.memo(function Ksl5bDetail({ ds, month }: { ds: Dataset
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
         <Panel title="Reason mix" subtitle="KO vs NOK count per reason category — sorted by volume" exportName="pcms_reasons">
           {reasonMix.length === 0 ? <Empty message="No PCms rows for this filter." /> : (
-            <ResponsiveContainer width="100%" height={Math.max(280, reasonMix.length * 34)}>
-              <BarChart data={reasonMix} layout="vertical" margin={{ top: 6, right: 36, left: 12, bottom: 0 }}>
+            <ChartFrame height={Math.max(280, reasonMix.length * 34)}>{(width) => (
+              <BarChart width={width} height={Math.max(280, reasonMix.length * 34)} data={reasonMix} layout="vertical" margin={{ top: 6, right: 36, left: 12, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
                 <YAxis type="category" dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} width={200} />
@@ -1506,14 +1537,14 @@ const Ksl5bDetail = React.memo(function Ksl5bDetail({ ds, month }: { ds: Dataset
                   <LabelList dataKey="total" position="right" style={{ fill: "var(--foreground)", fontSize: 11, fontWeight: 600 }} />
                 </Bar>
               </BarChart>
-            </ResponsiveContainer>
+            )}</ChartFrame>
           )}
         </Panel>
 
         <Panel title={`Top agents by KO/NOK${activeWeek === "all" ? "" : " · " + weekLabel(activeWeek)}`} subtitle="Click a bar to filter the drill table" exportName="pcms_agents">
           {agents.length === 0 ? <Empty message="No agent data for this filter." /> : (
-            <ResponsiveContainer width="100%" height={Math.max(260, agents.length * 32)}>
-              <BarChart data={agents} layout="vertical" margin={{ top: 4, right: 24, left: 12, bottom: 0 }}>
+            <ChartFrame height={Math.max(260, agents.length * 32)}>{(width) => (
+              <BarChart width={width} height={Math.max(260, agents.length * 32)} data={agents} layout="vertical" margin={{ top: 4, right: 24, left: 12, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
                 <YAxis type="category" dataKey="agent" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} width={120} />
@@ -1522,7 +1553,7 @@ const Ksl5bDetail = React.memo(function Ksl5bDetail({ ds, month }: { ds: Dataset
                   <LabelList dataKey="count" position="right" style={{ fill: "var(--foreground)", fontSize: 11, fontWeight: 600 }} />
                 </Bar>
               </BarChart>
-            </ResponsiveContainer>
+            )}</ChartFrame>
           )}
         </Panel>
       </div>
@@ -1530,8 +1561,8 @@ const Ksl5bDetail = React.memo(function Ksl5bDetail({ ds, month }: { ds: Dataset
 
       <Panel title="KSL-5b weekly trend · PCms overlay" subtitle="Bars = PCms KO/NOK count per week (right axis). Line = KSL-5b conformity %." exportName="pcms_ksl5b_overlay">
         {overlay.length === 0 ? <Empty message="No KSL-5b weekly data." /> : (
-          <ResponsiveContainer width="100%" height={300}>
-            <ComposedChart data={overlay} margin={{ top: 20, right: 28, left: 4, bottom: 4 }}>
+          <ChartFrame height={300}>{(width) => (
+            <ComposedChart width={width} height={300} data={overlay} margin={{ top: 20, right: 28, left: 4, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
               <YAxis yAxisId="left" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} />
@@ -1546,7 +1577,7 @@ const Ksl5bDetail = React.memo(function Ksl5bDetail({ ds, month }: { ds: Dataset
               </Line>
               <Legend wrapperStyle={{ fontSize: 11 }} />
             </ComposedChart>
-          </ResponsiveContainer>
+          )}</ChartFrame>
         )}
       </Panel>
 
