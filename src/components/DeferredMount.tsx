@@ -13,14 +13,9 @@ function enqueue(activate: () => void) {
 
 function drain() {
   if (queue.length === 0) { draining = false; return; }
-  draining = true;
-  // Wait 50 ms between each mount — gives the browser two full frames to
-  // handle input events (scroll, click, keydown) without being blocked.
-  setTimeout(() => {
-    const next = queue.shift();
-    if (next) next();
-    drain();
-  }, 50);
+  const next = queue.shift()!;
+  if (next) next();
+  drain();
 }
 
 /**
