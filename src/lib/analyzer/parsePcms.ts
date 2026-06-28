@@ -1,37 +1,13 @@
 import * as XLSX from "xlsx";
+import { PCMS_CATEGORIES, type PcmsRow } from "./pcmsAnalytics";
 
-export const PCMS_CATEGORIES: { id: number; label: string; color: string }[] = [
-  { id: 1,  label: "Valid Rejection",            color: "#0a9396" },
-  { id: 2,  label: "Communication",              color: "#94d2bd" },
-  { id: 3,  label: "COMPASS Solution",           color: "#005f73" },
-  { id: 4,  label: "Linkage quality",            color: "#e9d8a6" },
-  { id: 5,  label: "Related Incident",           color: "#ee9b00" },
-  { id: 6,  label: "Translation",                color: "#ca6702" },
-  { id: 7,  label: "Work Info Types",            color: "#bb3e03" },
-  { id: 8,  label: "Documentation Traceability", color: "#ae2012" },
-  { id: 9,  label: "Reasonable Ticket Processing", color: "#9b2226" },
-  { id: 10, label: "Service Efficiency",         color: "#3a86ff" },
-  { id: 11, label: "Other errors",               color: "#7b2cbf" },
-];
+// Re-export pure surface so existing imports keep working.
+export { PCMS_CATEGORIES, pcmsByCategory, pcmsTopAgents, pcmsWeeklyCounts } from "./pcmsAnalytics";
+export type { PcmsRow } from "./pcmsAnalytics";
 
 const MONTH_MAP: Record<string, number> = {
   january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
   july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
-};
-
-export type PcmsRow = {
-  ticket: string;
-  weekNum: number | null;     // 1..53
-  weekKey: string;            // "YYYY-Www" (year inferred or empty)
-  monthNum: number | null;    // 1..12
-  monthKey: string;           // "YYYY-MM"
-  monthName: string;
-  reason: string;
-  category: number;           // 0 if unknown
-  categoryLabel: string;
-  agent: string;
-  bmsId: string;
-  status: string;             // KO | NOK | other
 };
 
 function makeCol(row: Record<string, unknown>) {
