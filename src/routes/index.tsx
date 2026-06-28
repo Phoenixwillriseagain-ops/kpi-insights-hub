@@ -30,7 +30,7 @@ import { PCMS_CATEGORIES, pcmsTopAgents, pcmsWeeklyCounts } from "@/lib/analyzer
 import type { ValidationReport, ValidationIssue, SheetMapping } from "@/lib/analyzer/validate";
 import type { WorkerInput, WorkerOutput } from "@/lib/analyzer/worker";
 import { PerfPanel } from "@/components/PerfPanel";
-import { perfMark, perfMeasure, installLongTaskObserver } from "@/lib/perf";
+import { perfMark, perfMeasure } from "@/lib/perf";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")(
@@ -135,12 +135,6 @@ const toggleTheme = () => {
       toast.error("Analysis failed", { description: e instanceof Error ? e.message : String(e) });
     } finally { setBusy(false); }
   };
-
-  // Install long-task observer once so the perf panel can flag main-thread
-  // blocks (>50 ms) regardless of where they originate.
-  useEffect(() => { installLongTaskObserver(); }, []);
-
-
 
   const reset = () => { setDataset(null); setFiles({ sla: [], breach: [], excl: [] }); setReport(null); setOverride(false); setExclMappings([]); };
 

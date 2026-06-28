@@ -17,7 +17,18 @@ const MAX = 200;
 let nextId = 1;
 const t0 = performance.now();
 
+function enabledNow(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    if (new URLSearchParams(window.location.search).get("perf") === "1") return true;
+    return window.localStorage.getItem("perf") === "1";
+  } catch {
+    return false;
+  }
+}
+
 function emit(e: Omit<PerfEntry, "id" | "ts">) {
+  if (!enabledNow()) return;
   const entry: PerfEntry = { ...e, id: nextId++, ts: performance.now() - t0 };
   buffer.push(entry);
   if (buffer.length > MAX) buffer.splice(0, buffer.length - MAX);
@@ -48,19 +59,13 @@ export function perfSubscribe(fn: (entries: PerfEntry[]) => void): () => void {
 }
 
 export function isPerfEnabled(): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    if (new URLSearchParams(window.location.search).get("perf") === "1") return true;
-    return window.localStorage.getItem("perf") === "1";
-  } catch {
-    return false;
-  }
+  return enabledNow();
 }
 
 // Capture browser-reported long tasks (>50ms blocking main thread).
 let longTaskInstalled = false;
 export function installLongTaskObserver() {
-  if (longTaskInstalled || typeof PerformanceObserver === "undefined") return;
+  if (!enabledNow() || longTaskInstalled || typeof PerformanceObserver === "undefined") return;
   longTaskInstalled = true;
   try {
     const obs = new PerformanceObserver((list) => {
