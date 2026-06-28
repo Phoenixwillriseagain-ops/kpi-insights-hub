@@ -525,7 +525,10 @@ function useMountedTabs(activeTab: string) {
       return next;
     });
   }, [activeTab]);
-  return mounted;
+  // Always include the current active tab in the returned set
+  const result = new Set(mounted);
+  result.add(activeTab);
+  return result;
 }
 
 function Analysis({
