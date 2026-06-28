@@ -5,7 +5,7 @@ import tsconfigPaths from "vite-tsconfig-paths";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 
 export default defineConfig({
-  base: process.env.VITE_BASE || "/",
+  base: "/kpi-insights-hub/",  // <-- explicit GitHub Pages base
   plugins: [
     tanstackRouter({
       target: "react",
