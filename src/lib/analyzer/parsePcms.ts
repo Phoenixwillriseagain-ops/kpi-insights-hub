@@ -1,37 +1,13 @@
 import * as XLSX from "xlsx";
+import { PCMS_CATEGORIES, type PcmsRow } from "./pcmsAnalytics";
 
-export const PCMS_CATEGORIES: { id: number; label: string; color: string }[] = [
-  { id: 1,  label: "Valid Rejection",            color: "#0a9396" },
-  { id: 2,  label: "Communication",              color: "#94d2bd" },
-  { id: 3,  label: "COMPASS Solution",           color: "#005f73" },
-  { id: 4,  label: "Linkage quality",            color: "#e9d8a6" },
-  { id: 5,  label: "Related Incident",           color: "#ee9b00" },
-  { id: 6,  label: "Translation",                color: "#ca6702" },
-  { id: 7,  label: "Work Info Types",            color: "#bb3e03" },
-  { id: 8,  label: "Documentation Traceability", color: "#ae2012" },
-  { id: 9,  label: "Reasonable Ticket Processing", color: "#9b2226" },
-  { id: 10, label: "Service Efficiency",         color: "#3a86ff" },
-  { id: 11, label: "Other errors",               color: "#7b2cbf" },
-];
+// Re-export pure surface so existing imports keep working.
+export { PCMS_CATEGORIES, pcmsByCategory, pcmsTopAgents, pcmsWeeklyCounts } from "./pcmsAnalytics";
+export type { PcmsRow } from "./pcmsAnalytics";
 
 const MONTH_MAP: Record<string, number> = {
   january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
   july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
-};
-
-export type PcmsRow = {
-  ticket: string;
-  weekNum: number | null;     // 1..53
-  weekKey: string;            // "YYYY-Www" (year inferred or empty)
-  monthNum: number | null;    // 1..12
-  monthKey: string;           // "YYYY-MM"
-  monthName: string;
-  reason: string;
-  category: number;           // 0 if unknown
-  categoryLabel: string;
-  agent: string;
-  bmsId: string;
-  status: string;             // KO | NOK | other
 };
 
 function makeCol(row: Record<string, unknown>) {
@@ -117,43 +93,3 @@ export function parsePcms(wb: XLSX.WorkBook, inferYear: number | null): PcmsRow[
   return out;
 }
 
-/* Selectors ---------------------------------------------------------------- */
-
-export function pcmsByCategory(rows: PcmsRow[], opts?: { byWeek?: boolean }) {
-  const keyOf = (r: PcmsRow) => (opts?.byWeek ? r.weekKey || `W${r.weekNum ?? "?"}` : r.monthName || r.monthKey || "—");
-  const grouped: Record<string, Record<string, number>> = {};
-  rows.forEach((r) => {
-    if (!r.category) return;
-    const k = keyOf(r);
-    grouped[k] ??= {};
-    const cat = `cat_${r.category}`;
-    grouped[k][cat] = (grouped[k][cat] ?? 0) + 1;
-  });
-  return Object.entries(grouped)
-    .map(([label, cats]) => ({ label, ...cats, total: Object.values(cats).reduce((a, b) => a + b, 0) }))
-    .sort((a, b) => a.label.localeCompare(b.label));
-}
-
-export function pcmsTopAgents(rows: PcmsRow[], n = 10) {
-  const grouped: Record<string, { agent: string; count: number; ko: number; nok: number; byCat: Record<number, number> }> = {};
-  rows.forEach((r) => {
-    if (!r.agent) return;
-    grouped[r.agent] ??= { agent: r.agent, count: 0, ko: 0, nok: 0, byCat: {} };
-    grouped[r.agent].count += 1;
-    if (r.status === "KO") grouped[r.agent].ko += 1;
-    if (r.status === "NOK") grouped[r.agent].nok += 1;
-    grouped[r.agent].byCat[r.category] = (grouped[r.agent].byCat[r.category] ?? 0) + 1;
-  });
-  return Object.values(grouped).sort((a, b) => b.count - a.count).slice(0, n);
-}
-
-export function pcmsWeeklyCounts(rows: PcmsRow[]) {
-  const grouped: Record<string, number> = {};
-  rows.forEach((r) => {
-    if (!r.weekKey) return;
-    grouped[r.weekKey] = (grouped[r.weekKey] ?? 0) + 1;
-  });
-  return Object.entries(grouped)
-    .map(([weekKey, count]) => ({ weekKey, count }))
-    .sort((a, b) => a.weekKey.localeCompare(b.weekKey));
-}

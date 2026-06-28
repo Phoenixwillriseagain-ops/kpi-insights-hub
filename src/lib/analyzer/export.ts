@@ -1,12 +1,7 @@
-import { toPng, toJpeg } from "html-to-image";
-import * as XLSX from "xlsx";
-import type { Dataset } from "./parse";
+// Both `xlsx` and `html-to-image` are heavy; load them only when an export
+// is actually triggered so they never enter the initial main-thread bundle.
+import type { Dataset } from "./parseTypes";
 import type { KpiCode } from "./kpi";
-import { KPI_META, KPI_ORDER } from "./kpi";
-import {
-  exclusionImpact, monthlySummary, overallByKpi, queueBreakdown,
-  rawOverallByKpi, weeklySummary,
-} from "./compute";
 
 function stamp(): string {
   const d = new Date();
@@ -29,9 +24,8 @@ export async function exportNodeAsImage(
   name: string,
   fmt: "png" | "jpeg" = "png",
 ) {
-  // Temporarily expand scrollable descendants so html-to-image doesn't bake
-  // scrollbars or clipped rows into the snapshot, and force header chips
-  // (target ≤ 5%, etc.) to render on a single line.
+  const { toPng, toJpeg } = await import("html-to-image");
+
   const mutated: { el: HTMLElement; prev: string }[] = [];
   const stash = (el: HTMLElement, css: Partial<CSSStyleDeclaration>) => {
     mutated.push({ el, prev: el.getAttribute("style") ?? "" });
@@ -70,11 +64,21 @@ export async function exportNodeAsImage(
   }
 }
 
-export function exportDatasetWorkbook(ds: Dataset, month: string | null) {
+export async function exportDatasetWorkbook(ds: Dataset, month: string | null) {
+  // Lazy-imported on click so xlsx (~500 KB) never lands in the main bundle.
+  const [XLSX, { KPI_META, KPI_ORDER }, compute] = await Promise.all([
+    import("xlsx"),
+    import("./kpi"),
+    import("./compute"),
+  ]);
+  const {
+    exclusionImpact, monthlySummary, overallByKpi, queueBreakdown,
+    rawOverallByKpi, weeklySummary,
+  } = compute;
+
   const wb = XLSX.utils.book_new();
   const detected = KPI_ORDER.filter((c) => ds.sla[c]?.length);
 
-  // Overview
   const overview = detected.map((code) => {
     const o = overallByKpi(ds, code, month);
     const raw = rawOverallByKpi(ds, code, month);
@@ -92,7 +96,6 @@ export function exportDatasetWorkbook(ds: Dataset, month: string | null) {
   });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(overview), "Overview");
 
-  // Monthly
   const monthly: Record<string, unknown>[] = [];
   detected.forEach((code) => {
     monthlySummary(ds, code).forEach((p) => {
@@ -101,7 +104,6 @@ export function exportDatasetWorkbook(ds: Dataset, month: string | null) {
   });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(monthly), "Monthly");
 
-  // Weekly
   const weekly: Record<string, unknown>[] = [];
   detected.forEach((code) => {
     weeklySummary(ds, code, { lastN: 6 }).forEach((p) => {
@@ -110,7 +112,6 @@ export function exportDatasetWorkbook(ds: Dataset, month: string | null) {
   });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(weekly), "Weekly");
 
-  // Queues
   const queues: Record<string, unknown>[] = [];
   detected.forEach((code) => {
     queueBreakdown(ds, code, month).forEach((q) => {
@@ -119,7 +120,6 @@ export function exportDatasetWorkbook(ds: Dataset, month: string | null) {
   });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(queues), "Queues");
 
-  // Exclusion impact
   const excl = detected.map((code) => {
     const e = exclusionImpact(ds, code, month);
     return {
