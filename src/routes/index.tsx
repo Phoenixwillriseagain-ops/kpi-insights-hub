@@ -147,7 +147,9 @@ const toggleTheme = () => {
   return (
     <div className="min-h-screen">
       <Toaster richColors position="top-right" />
-      <Header onToggleTheme={toggleTheme} dark={dark} onReset={dataset ? reset : undefined} onExport={dataset ? async () => { const m = await import("@/lib/analyzer/export"); await m.exportDatasetWorkbook(dataset, activeMonth); } : undefined} />
+      <PerfPanel />
+      <Header onToggleTheme={toggleTheme} dark={dark} onReset={dataset ? reset : undefined} onExport={dataset ? async () => { const m = await perfMeasure("import xlsx + run export", () => import("@/lib/analyzer/export")); await perfMeasure("exportDatasetWorkbook", () => m.exportDatasetWorkbook(dataset, activeMonth)); } : undefined} />
+
 
       {!dataset ? (
         <UploadHero
