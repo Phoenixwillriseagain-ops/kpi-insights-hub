@@ -5,5 +5,5 @@ import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), tsconfigPaths()],
-  base: "/kpi-insights-hub/",  // <-- explicit GitHub Pages repo base
+  base: "/",
 });
