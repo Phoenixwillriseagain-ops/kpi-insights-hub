@@ -29,6 +29,8 @@ import { DeferredMount } from "@/components/DeferredMount";
 import { PCMS_CATEGORIES, pcmsTopAgents, pcmsWeeklyCounts } from "@/lib/analyzer/pcmsAnalytics";
 import type { ValidationReport, ValidationIssue, SheetMapping } from "@/lib/analyzer/validate";
 import type { WorkerInput, WorkerOutput } from "@/lib/analyzer/worker";
+import { PerfPanel } from "@/components/PerfPanel";
+import { perfMark, perfMeasure, installLongTaskObserver } from "@/lib/perf";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")(
