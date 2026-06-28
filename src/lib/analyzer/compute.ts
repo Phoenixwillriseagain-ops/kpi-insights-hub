@@ -1,5 +1,5 @@
 import { KPI_META, calcTarget, type KpiCode } from "./kpi";
-import { exclSet as rawExclSet, type Dataset, type SlaRow } from "./parse";
+import { exclSet as rawExclSet, type Dataset, type SlaRow } from "./parseTypes";
 
 export type PeriodPoint = {
   label: string;
