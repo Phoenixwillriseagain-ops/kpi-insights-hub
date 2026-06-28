@@ -29,6 +29,8 @@ import { DeferredMount } from "@/components/DeferredMount";
 import { PCMS_CATEGORIES, pcmsTopAgents, pcmsWeeklyCounts } from "@/lib/analyzer/pcmsAnalytics";
 import type { ValidationReport, ValidationIssue, SheetMapping } from "@/lib/analyzer/validate";
 import type { WorkerInput, WorkerOutput } from "@/lib/analyzer/worker";
+import { PerfPanel } from "@/components/PerfPanel";
+import { perfMark, perfMeasure, installLongTaskObserver } from "@/lib/perf";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")(
@@ -84,24 +86,32 @@ const toggleTheme = () => {
 
   const runAnalysis = async () => {
     setBusy(true);
+    perfMark("runAnalysis:start");
     try {
       const toBufs = async (items: LoadedFile[]) =>
         Promise.all(
           items.filter((f) => f.file).map(async (f) => ({ name: f.name, buf: await f.file!.arrayBuffer() })),
         );
-      const [sla, breach, excl] = await Promise.all([
-        toBufs(files.sla), toBufs(files.breach), toBufs(files.excl),
-      ]);
+      const [sla, breach, excl] = await perfMeasure("read files → ArrayBuffer", async () =>
+        Promise.all([toBufs(files.sla), toBufs(files.breach), toBufs(files.excl)]),
+      );
+      const totalBytes = [...sla, ...breach, ...excl].reduce((n, x) => n + x.buf.byteLength, 0);
+      perfMark("workbook bytes", `${(totalBytes / 1048576).toFixed(2)} MB`);
 
-      const worker = new Worker(new URL("../lib/analyzer/worker.ts", import.meta.url), { type: "module" });
-      const result = await new Promise<WorkerOutput>((resolve, reject) => {
-        worker.onmessage = (e: MessageEvent<WorkerOutput>) => resolve(e.data);
-        worker.onerror = (e) => reject(new Error(e.message || "Worker error"));
-        const payload: WorkerInput = { sla, breach, excl };
-        const transfer = [...sla, ...breach, ...excl].map((x) => x.buf);
-        worker.postMessage(payload, transfer);
+      const result = await perfMeasure("worker: parse + buildDataset", async () => {
+        const worker = new Worker(new URL("../lib/analyzer/worker.ts", import.meta.url), { type: "module" });
+        try {
+          return await new Promise<WorkerOutput>((resolve, reject) => {
+            worker.onmessage = (e: MessageEvent<WorkerOutput>) => resolve(e.data);
+            worker.onerror = (e) => reject(new Error(e.message || "Worker error"));
+            const payload: WorkerInput = { sla, breach, excl };
+            const transfer = [...sla, ...breach, ...excl].map((x) => x.buf);
+            worker.postMessage(payload, transfer);
+          });
+        } finally {
+          worker.terminate();
+        }
       });
-      worker.terminate();
 
       if (!result.ok) throw new Error(result.error);
       setReport(result.report);
@@ -119,11 +129,17 @@ const toggleTheme = () => {
       }
       setDataset(ds);
       setActiveMonth(null);
+      perfMark("dataset ready", `${ds.months.length}mo · ${ds.weeks.length}wk · ${Object.keys(ds.sla).length} KPIs`);
       toast.success("Analysis ready", { description: `${ds.months.length} months · ${ds.weeks.length} weeks · ${Object.keys(ds.sla).length} KPIs` });
     } catch (e) {
       toast.error("Analysis failed", { description: e instanceof Error ? e.message : String(e) });
     } finally { setBusy(false); }
   };
+
+  // Install long-task observer once so the perf panel can flag main-thread
+  // blocks (>50 ms) regardless of where they originate.
+  useEffect(() => { installLongTaskObserver(); }, []);
+
 
 
   const reset = () => { setDataset(null); setFiles({ sla: [], breach: [], excl: [] }); setReport(null); setOverride(false); setExclMappings([]); };
@@ -131,7 +147,9 @@ const toggleTheme = () => {
   return (
     <div className="min-h-screen">
       <Toaster richColors position="top-right" />
-      <Header onToggleTheme={toggleTheme} dark={dark} onReset={dataset ? reset : undefined} onExport={dataset ? async () => { const m = await import("@/lib/analyzer/export"); await m.exportDatasetWorkbook(dataset, activeMonth); } : undefined} />
+      <PerfPanel />
+      <Header onToggleTheme={toggleTheme} dark={dark} onReset={dataset ? reset : undefined} onExport={dataset ? async () => { const m = await perfMeasure("import xlsx + run export", () => import("@/lib/analyzer/export")); await perfMeasure("exportDatasetWorkbook", () => m.exportDatasetWorkbook(dataset, activeMonth)); } : undefined} />
+
 
       {!dataset ? (
         <UploadHero
@@ -563,7 +581,7 @@ function Analysis({
         ))}
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      <Tabs value={activeTab} onValueChange={(v) => { perfMark("tab switch", `${activeTab} → ${v}`); setActiveTab(v); }} className="space-y-6">
         <TabsList className="glass h-12 w-full justify-start gap-1 rounded-2xl p-1.5">
           <TabTrigger value="overview" icon={BarChart3}>Overview</TabTrigger>
           <TabTrigger value="monthly" icon={LineChartIcon}>Monthly Trend</TabTrigger>
