@@ -86,24 +86,32 @@ const toggleTheme = () => {
 
   const runAnalysis = async () => {
     setBusy(true);
+    perfMark("runAnalysis:start");
     try {
       const toBufs = async (items: LoadedFile[]) =>
         Promise.all(
           items.filter((f) => f.file).map(async (f) => ({ name: f.name, buf: await f.file!.arrayBuffer() })),
         );
-      const [sla, breach, excl] = await Promise.all([
-        toBufs(files.sla), toBufs(files.breach), toBufs(files.excl),
-      ]);
+      const [sla, breach, excl] = await perfMeasure("read files → ArrayBuffer", async () =>
+        Promise.all([toBufs(files.sla), toBufs(files.breach), toBufs(files.excl)]),
+      );
+      const totalBytes = [...sla, ...breach, ...excl].reduce((n, x) => n + x.buf.byteLength, 0);
+      perfMark("workbook bytes", `${(totalBytes / 1048576).toFixed(2)} MB`);
 
-      const worker = new Worker(new URL("../lib/analyzer/worker.ts", import.meta.url), { type: "module" });
-      const result = await new Promise<WorkerOutput>((resolve, reject) => {
-        worker.onmessage = (e: MessageEvent<WorkerOutput>) => resolve(e.data);
-        worker.onerror = (e) => reject(new Error(e.message || "Worker error"));
-        const payload: WorkerInput = { sla, breach, excl };
-        const transfer = [...sla, ...breach, ...excl].map((x) => x.buf);
-        worker.postMessage(payload, transfer);
+      const result = await perfMeasure("worker: parse + buildDataset", async () => {
+        const worker = new Worker(new URL("../lib/analyzer/worker.ts", import.meta.url), { type: "module" });
+        try {
+          return await new Promise<WorkerOutput>((resolve, reject) => {
+            worker.onmessage = (e: MessageEvent<WorkerOutput>) => resolve(e.data);
+            worker.onerror = (e) => reject(new Error(e.message || "Worker error"));
+            const payload: WorkerInput = { sla, breach, excl };
+            const transfer = [...sla, ...breach, ...excl].map((x) => x.buf);
+            worker.postMessage(payload, transfer);
+          });
+        } finally {
+          worker.terminate();
+        }
       });
-      worker.terminate();
 
       if (!result.ok) throw new Error(result.error);
       setReport(result.report);
@@ -121,11 +129,17 @@ const toggleTheme = () => {
       }
       setDataset(ds);
       setActiveMonth(null);
+      perfMark("dataset ready", `${ds.months.length}mo · ${ds.weeks.length}wk · ${Object.keys(ds.sla).length} KPIs`);
       toast.success("Analysis ready", { description: `${ds.months.length} months · ${ds.weeks.length} weeks · ${Object.keys(ds.sla).length} KPIs` });
     } catch (e) {
       toast.error("Analysis failed", { description: e instanceof Error ? e.message : String(e) });
     } finally { setBusy(false); }
   };
+
+  // Install long-task observer once so the perf panel can flag main-thread
+  // blocks (>50 ms) regardless of where they originate.
+  useEffect(() => { installLongTaskObserver(); }, []);
+
 
 
   const reset = () => { setDataset(null); setFiles({ sla: [], breach: [], excl: [] }); setReport(null); setOverride(false); setExclMappings([]); };
