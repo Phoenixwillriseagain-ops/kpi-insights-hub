@@ -1,45 +1,11 @@
 import * as XLSX from "xlsx";
 import { KPI_ORDER, matchKpi, type KpiCode } from "./kpi";
-import { parsePcms, type PcmsRow } from "./parsePcms";
+import { parsePcms } from "./parsePcms";
+import type { SlaRow, BreachRow, ExclRow, Dataset } from "./parseTypes";
 
-export type SlaRow = {
-  ticket: string;
-  month: string; // "YYYY-MM" or "unknown"
-  week: string; // "YYYY-Www" or "No week"
-  queue: string;
-  language: string;
-  isBreach: boolean;
-  isExcluded: boolean;
-};
-
-export type BreachRow = {
-  ticket: string;
-  week: string;
-  month: string;
-  queue: string;
-  agent: string;
-  reason: string;
-  aos: string;
-  comment: string;
-};
-
-export type ExclRow = {
-  ticket: string;
-  reason: string;
-  comment: string;
-  jira: string;
-  date: string;
-  priority: string;
-};
-
-export type Dataset = {
-  sla: Partial<Record<KpiCode, SlaRow[]>>;
-  breach: Partial<Record<KpiCode, BreachRow[]>>;
-  excl: Partial<Record<KpiCode, ExclRow[]>>;
-  pcms: PcmsRow[];
-  months: string[];
-  weeks: string[];
-};
+// Re-export pure types/selectors so existing imports keep working.
+export type { SlaRow, BreachRow, ExclRow, Dataset } from "./parseTypes";
+export { exclSet, filteredRows, rawRows } from "./parseTypes";
 
 function parseDate(v: unknown): Date | null {
   if (v == null || v === "") return null;
