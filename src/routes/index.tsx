@@ -59,13 +59,15 @@ function Dashboard() {
   const [exclMappings, setExclMappings] = useState<SheetMapping[]>([]);
   const [override, setOverride] = useState(false);
 
-  const toggleTheme = () => {
-    setDark((d) => {
-      const next = !d;
-      document.documentElement.classList.toggle("dark", next);
-      return next;
-    });
-  };
+const ref = useRef<HTMLInputElement>(null);
+
+const toggleTheme = () => {
+  setDark((d) => {
+    const next = !d;
+    document.documentElement.classList.toggle("dark", next);
+    return next;
+  });
+};
 
   const addFiles = useCallback(async (slot: Slot, list: FileList | File[]) => {
     const arr = Array.from(list);
