@@ -271,7 +271,15 @@ function Dashboard() {
 
 /* ────────────────────────────────────────────────────────────── HEADER */
 
-function Header({ onToggleTheme, dark, onReset }: { onToggleTheme: () => void; dark: boolean; onReset?: () => void }) {
+function Header({
+  onToggleTheme,
+  dark,
+  onReset,
+}: {
+  onToggleTheme: () => void;
+  dark: boolean;
+  onReset?: () => void;
+}) {
   return (
     <header className="sticky top-0 z-40 glass border-b border-border/50">
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-6 py-3">
@@ -280,7 +288,9 @@ function Header({ onToggleTheme, dark, onReset }: { onToggleTheme: () => void; d
         </div>
         <div className="flex flex-col leading-tight">
           <span className="font-display text-base font-bold">Pulse</span>
-          <span className="text-[10px] uppercase tracking-widest text-muted-foreground">KPI & Breaches Analyzer</span>
+          <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            KPI & Breaches Analyzer
+          </span>
         </div>
         <div className="ml-auto flex items-center gap-2">
           {onReset && (
@@ -296,7 +306,6 @@ function Header({ onToggleTheme, dark, onReset }: { onToggleTheme: () => void; d
     </header>
   );
 }
-
 /* ────────────────────────────────────────────────────────── UPLOAD HERO */
 
 const SLOT_META: Record<Slot, { title: string; desc: string; required?: boolean; icon: typeof FileSpreadsheet; accent: string }> = {
