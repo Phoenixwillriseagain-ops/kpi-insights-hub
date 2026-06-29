@@ -675,7 +675,7 @@ useEffect(() => {
           <TabTrigger value="overview" icon={BarChart3}>Overview</TabTrigger>
           <TabTrigger value="monthly" icon={LineChartIcon}>Monthly Trend</TabTrigger>
           <TabTrigger value="weekly" icon={Activity}>Weekly Trend</TabTrigger>
-          <TabTrigger value="queues" icon={Layers}>Queue Analysis</TabTrigger>
+          <TabTrigger value="" icon={Layers}>Queue Analysis</TabTrigger>
           <TabTrigger value="excl" icon={Filter}>Exclusion Impact</TabTrigger>
           <TabTrigger value="quality" icon={CheckCircle2}>KSL-4 &amp; KM-1</TabTrigger>
           {ds.pcms.length > 0 && <TabTrigger value="ksl5b" icon={Users}>KSL-5b Detail</TabTrigger>}
@@ -1082,12 +1082,13 @@ function WeeklyTable({ rows, isKM }: { rows: WeeklyTableRow[]; isKM: boolean }) 
 /* ─────────────────────────────────────────────────── QUEUES */
 
 const QueuesSection = React.memo(function QueuesSection({
-  ds, month, detected, activeKpi,
+  ds, month, detected, activeKpi, setActiveKpi,
 }: {
   ds: Dataset;
   month: string | null;
   detected: KpiCode[];
   activeKpi: KpiCode;
+  setActiveKpi: (k: KpiCode) => void;
 }) {
   const safe = detected.includes(activeKpi) ? activeKpi : (detected[0] ?? "KSL-2c");
   const meta = KPI_META[safe];
