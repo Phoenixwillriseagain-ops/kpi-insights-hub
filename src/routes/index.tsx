@@ -631,21 +631,6 @@ function UploadCard({ slot, files, onAdd, onRemove }: {
  * content lazily (only on first visit) and keep it mounted after that to
  * avoid re-render costs on every tab switch.
  */
-function useMountedTabs(activeTab: string) {
-  const [mounted, setMounted] = useState<Set<string>>(() => new Set([activeTab]));
-  useEffect(() => {
-    setMounted((prev) => {
-      if (prev.has(activeTab)) return prev;
-      const next = new Set(prev);
-      next.add(activeTab);
-      return next;
-    });
-  }, [activeTab]);
-  // Always include the current active tab in the returned set
-  const result = new Set(mounted);
-  result.add(activeTab);
-  return result;
-}
 
 function Analysis({
   ds, month, setMonth, activeKpi, setActiveKpi,
@@ -662,8 +647,7 @@ function Analysis({
   );
 
   const [activeTab, setActiveTab] = useState<string>("overview");
-  const mountedTabs = useMountedTabs(activeTab);
-
+ 
   useEffect(() => {
     console.log("activeTab", activeTab);
     console.log("mountedTabs", [...mountedTabs]);
@@ -715,17 +699,9 @@ function Analysis({
           {activeTab === "weekly" && <WeeklySection ds={ds} detected={detectedKpis} />}
         </TabsContent>
 
-        <TabsContent value="queues" className="space-y-6">
-          {activeTab === "queues" && (
-            <QueuesSection
-              ds={ds}
-              month={month}
-              detected={detectedKpis}
-              activeKpi={activeKpi}
-              setActiveKpi={setActiveKpi}
-            />
-          )}
-        </TabsContent>
+       <TabsContent value="queues" className="space-y-6">
+  {activeTab === "queues" && <QueuesSection ds={ds} month={month} detected={detectedKpis} activeKpi={activeKpi} setActiveKpi={setActiveKpi} />}
+</TabsContent>
 
         <TabsContent value="excl" className="space-y-6">
           {activeTab === "excl" && <ExclusionSection ds={ds} month={month} detected={detectedKpis} />}
@@ -1405,35 +1381,49 @@ function ChartFrame({
   children: (width: number) => React.ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(0);
+  const [width, setWidth] = useState<number>(0);
 
   useEffect(() => {
-    let raf = 0;
-    const measure = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const next = Math.floor(ref.current?.clientWidth ?? 0);
-        if (next > 0) setWidth((current) => (Math.abs(current - next) > 1 ? next : current));
+    const el = ref.current;
+    if (!el) return;
+
+    let frame = 0;
+    let ro: ResizeObserver | null = null;
+
+    const update = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const next = Math.max(0, Math.floor(el.clientWidth));
+        setWidth((prev) => (prev !== next ? next : prev));
       });
     };
 
-    measure();
-    window.addEventListener("resize", measure, { passive: true });
+    update();
+
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(() => update());
+      ro.observe(el);
+    } else {
+      window.addEventListener("resize", update, { passive: true });
+    }
+
     return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("resize", measure);
+      cancelAnimationFrame(frame);
+      ro?.disconnect();
+      window.removeEventListener("resize", update);
     };
   }, []);
 
   return (
     <div ref={ref} className="w-full" style={{ height }}>
-      {width > 0
-        ? children(width)
-        : <div style={{ height }} className="w-full animate-pulse rounded bg-secondary/30" />}
+      {width > 40 ? (
+        children(width)
+      ) : (
+        <div style={{ height }} className="w-full animate-pulse rounded bg-secondary/30" />
+      )}
     </div>
   );
 }
-
 
 function RichTip({ active, payload, label, meta }: any) {
   if (!active || !payload?.length) return null;
