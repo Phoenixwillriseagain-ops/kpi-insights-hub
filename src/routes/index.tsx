@@ -644,8 +644,13 @@ function Analysis({
 const [activeTab, setActiveTab] = useState<string>("overview");
 
 useEffect(() => {
-  console.log("activeTab", activeTab);
-}, [activeTab]);
+  console.log("dataset diagnostics", {
+  months: ds.months,
+  weeks: ds.weeks,
+  slaKeys: Object.keys(ds.sla),
+  pcmsRows: ds.pcms.length,
+  ksl5bRows: ds.sla["KSL-5b"]?.length ?? 0,
+});
 
   return (
     <main className="mx-auto max-w-7xl px-6 py-8">
@@ -1137,49 +1142,60 @@ const queue = activeQueue === "__none__" ? "" : activeQueue;
   const values = weeklyData.map((d) => d.rate).filter((v) => Number.isFinite(v));
   const minY = values.length ? Math.floor(Math.min(...values, meta.target) - 1.5) : "auto";
   const maxY = values.length ? Math.ceil(Math.max(...values, meta.target) + 1.5) : "auto";
-
+  
+  useEffect(() => {
+  console.log("queue diagnostics", {
+    safe,
+    month,
+    queueCount: queues.length,
+    selectedQueue: queue,
+    firstQueue: queues[0],
+    weeklyCount: weeklyData.length,
+  });
+}, [safe, month, queues, queue, weeklyData]);
+  
   return (
     <>
-                       <div className="flex flex-wrap items-center gap-3">
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          KPI
-        </span>
+        <div className="flex flex-wrap items-center gap-3">
+  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+    KPI
+  </span>
 
-        <Select value={safe} onValueChange={(v) => setActiveKpi(v as KpiCode)}>
-          <SelectTrigger className="h-9 w-56 rounded-full glass">
-            <SelectValue placeholder="Select KPI" />
-          </SelectTrigger>
-          <SelectContent>
-            {detected.map((code) => (
-              <SelectItem key={code} value={code}>
-                {code}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+  <Select value={safe} onValueChange={(v) => setActiveKpi(v as KpiCode)}>
+    <SelectTrigger className="h-9 w-56 rounded-full glass">
+      <SelectValue />
+    </SelectTrigger>
+    <SelectContent>
+      {detected.map((code) => (
+        <SelectItem key={code} value={code}>
+          {code} · {KPI_META[code].what}
+        </SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
 
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Queue
-        </span>
+  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+    Queue
+  </span>
 
-        <Select value={activeQueue} onValueChange={setActiveQueue}>
-          <SelectTrigger className="h-9 w-64 rounded-full glass">
-            <SelectValue placeholder="Select queue" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">Select queue</SelectItem>
-            {queues.map((q) => (
-              <SelectItem key={q.queue} value={q.queue}>
-                {q.queue} · {q.total} tickets
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+  <Select value={activeQueue} onValueChange={setActiveQueue}>
+    <SelectTrigger className="h-9 w-64 rounded-full glass">
+      <SelectValue placeholder="Select queue" />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="__none__">Select queue</SelectItem>
+      {queues.map((q) => (
+        <SelectItem key={q.queue} value={q.queue}>
+          {q.queue} · {q.total} tickets
+        </SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
 
-        <Badge variant="secondary" className="ml-auto">
-          {queues.length} queues
-        </Badge>
-      </div>
+  <Badge variant="secondary" className="ml-auto">
+    {queues.length} queues
+  </Badge>
+</div>
 
     <Panel
   title={`${safe} · ${queue || "—"} · weekly trend`}
