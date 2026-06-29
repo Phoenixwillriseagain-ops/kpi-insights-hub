@@ -645,14 +645,15 @@ const [activeTab, setActiveTab] = useState<string>("overview");
 
 useEffect(() => {
   console.log("dataset diagnostics", {
-  months: ds.months,
-  weeks: ds.weeks,
-  slaKeys: Object.keys(ds.sla),
-  pcmsRows: ds.pcms.length,
-  ksl5bRows: ds.sla["KSL-5b"]?.length ?? 0,
-});
+    months: ds.months,
+    weeks: ds.weeks,
+    slaKeys: Object.keys(ds.sla),
+    pcmsRows: ds.pcms.length,
+    ksl5bRows: ds.sla["KSL-5b"]?.length ?? 0,
+  });
+}, [ds]);
 
-  return (
+return (
     <main className="mx-auto max-w-7xl px-6 py-8">
       <div
         className="mb-6 flex flex-wrap items-center gap-2"
