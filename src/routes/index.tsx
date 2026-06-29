@@ -1171,7 +1171,7 @@ const QueuesSection = React.memo(function QueuesSection({
           Queue
         </span>
 
-        <Select value={queue} onValueChange={setActiveQueue}>
+        <Select value={queue || undefined} onValueChange={setActiveQueue}>
           <SelectTrigger className="h-9 w-64 rounded-full glass">
             <SelectValue placeholder="Select queue" />
           </SelectTrigger>
@@ -1193,7 +1193,7 @@ const QueuesSection = React.memo(function QueuesSection({
         title={`${safe} · ${queue || "—"} · weekly trend`}
         subtitle={meta.what}
         badge={meta.targetLabel}
-        exportName={`queue_weekly_${safe}_${queue}`}
+        exportName={`queue_weekly_${safe}_${queue || "none"}`}
       >
         {weeklyData.length === 0 ? (
           <Empty message="No weekly data for this queue." />
@@ -1208,10 +1208,7 @@ const QueuesSection = React.memo(function QueuesSection({
                   margin={{ top: 26, right: 28, left: 4, bottom: 6 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-                  />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
                   <YAxis
                     tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                     tickFormatter={(v) => `${Math.round(v)}%`}
@@ -1274,11 +1271,7 @@ const QueuesSection = React.memo(function QueuesSection({
                       formatter={(v: number) =>
                         Number.isFinite(v) ? `${v.toFixed(1)}%` : ""
                       }
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 600,
-                        fill: "var(--foreground)",
-                      }}
+                      style={{ fontSize: 11, fontWeight: 600, fill: "var(--foreground)" }}
                     />
                   </Line>
                 </LineChart>
@@ -1305,7 +1298,6 @@ const QueuesSection = React.memo(function QueuesSection({
                 <TableHead className="text-right">Status</TableHead>
               </TableRow>
             </TableHeader>
-
             <TableBody>
               {queues.map((q) => (
                 <TableRow
@@ -1314,12 +1306,8 @@ const QueuesSection = React.memo(function QueuesSection({
                   onClick={() => setActiveQueue(q.queue)}
                 >
                   <TableCell className="font-medium">{q.queue}</TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {q.total.toLocaleString()}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {q.breaches.toLocaleString()}
-                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{q.total.toLocaleString()}</TableCell>
+                  <TableCell className="text-right tabular-nums">{q.breaches.toLocaleString()}</TableCell>
                   <TableCell
                     className="text-right font-semibold tabular-nums"
                     style={{
@@ -1340,13 +1328,9 @@ const QueuesSection = React.memo(function QueuesSection({
                   </TableCell>
                 </TableRow>
               ))}
-
               {queues.length === 0 && (
                 <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="py-10 text-center text-sm text-muted-foreground"
-                  >
+                  <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
                     No queues for this filter.
                   </TableCell>
                 </TableRow>
