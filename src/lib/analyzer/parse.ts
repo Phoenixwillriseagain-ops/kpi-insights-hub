@@ -73,14 +73,14 @@ export function parseSla(wb: XLSX.WorkBook): Partial<Record<KpiCode, SlaRow[]>> 
                        String(breachVal).toUpperCase() === "YES" || (!!breachTime && breachTime !== "0");
       const exclRaw = String(col("EXCLUDED", "IS_EXCLUDED", "EXCLUDE") || "").trim();
       acc.push({
-        ticket,
-        month,
-        week,
-        queue: String(col("Queue") || col("QUEUE") || col("TEAM") || col("GROUP") || col("DEPARTMENT") || "Unknown")
-        language: String(col("ISOLANGUAGE", "ISO_LANGUAGE", "LANGUAGE", "LANG") || "unknown"),
-        isBreach,
-        isExcluded: exclRaw === "1" || exclRaw.toUpperCase() === "Y",
-      });
+  ticket,
+  month,
+  week,
+  queue: String(col("Queue") || col("QUEUE") || col("TEAM") || col("GROUP") || col("DEPARTMENT") || "Unknown"),
+  language: String(col("ISOLANGUAGE", "ISO_LANGUAGE", "LANGUAGE", "LANG") || "unknown"),
+  isBreach,
+  isExcluded: exclRaw === "1" || exclRaw.toUpperCase() === "Y",
+});
     });
     out[code] = acc;
   }
@@ -108,15 +108,15 @@ export function parseBreach(wb: XLSX.WorkBook): Partial<Record<KpiCode, BreachRo
       const monV = String(col("MONTH", "PERIOD", "YEARMONTH") || "");
       const month = /^\d{4}-\d{2}$/.test(monV) ? monV : (week !== "No week" ? week.slice(0, 7) : "unknown");
       acc.push({
-        ticket: String(col("TICKET", "TICKETID", "TICKET_ID", "ID", "CASEID") || ""),
-        week,
-        month,
-        queue: String(col("Queue") || col("QUEUE") || col("TEAM") || col("GROUP") || col("DEPARTMENT") || "Unknown")
-        agent: String(col("AGENT", "AGENTNAME", "AGENT_NAME", "OWNER") || ""),
-        reason: String(col("REASON", "BREACH_REASON", "BREACHREASON") || ""),
-        aos: String(col("AOS", "SLA_TYPE", "SLATYPE", "TYPE") || ""),
-        comment: String(col("COMMENT", "COMMENTS", "NOTE", "NOTES") || ""),
-      });
+  ticket: String(col("TICKET", "TICKETID", "TICKET_ID", "ID", "CASEID") || ""),
+  week,
+  month,
+  queue: String(col("Queue") || col("QUEUE") || col("TEAM") || col("GROUP") || col("DEPARTMENT") || "Unknown"),
+  agent: String(col("AGENT", "AGENTNAME", "AGENT_NAME", "OWNER") || ""),
+  reason: String(col("REASON", "BREACH_REASON", "BREACHREASON") || ""),
+  aos: String(col("AOS", "SLA_TYPE", "SLATYPE", "TYPE") || ""),
+  comment: String(col("COMMENT", "COMMENTS", "NOTE", "NOTES") || ""),
+});
     });
     out[code] = acc;
   }
