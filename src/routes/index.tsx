@@ -646,12 +646,11 @@ function Analysis({
     [ds],
   );
 
-  const [activeTab, setActiveTab] = useState<string>("overview");
- 
-  useEffect(() => {
-    console.log("activeTab", activeTab);
-    console.log("mountedTabs", [...mountedTabs]);
-  }, [activeTab, mountedTabs]);
+const [activeTab, setActiveTab] = useState<string>("overview");
+
+useEffect(() => {
+  console.log("activeTab", activeTab);
+}, [activeTab]);
 
   return (
     <main className="mx-auto max-w-7xl px-6 py-8">
@@ -688,34 +687,28 @@ function Analysis({
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          {activeTab === "overview" && <OverviewSection ds={ds} month={month} detected={detectedKpis} />}
-        </TabsContent>
-
-        <TabsContent value="monthly" className="space-y-6">
-          {activeTab === "monthly" && <MonthlySection ds={ds} detected={detectedKpis} />}
-        </TabsContent>
-
-        <TabsContent value="weekly" className="space-y-6">
-          {activeTab === "weekly" && <WeeklySection ds={ds} detected={detectedKpis} />}
-        </TabsContent>
-
-       <TabsContent value="queues" className="space-y-6">
+  {activeTab === "overview" && <OverviewSection ds={ds} month={month} detected={detectedKpis} />}
+</TabsContent>
+<TabsContent value="monthly" className="space-y-6">
+  {activeTab === "monthly" && <MonthlySection ds={ds} detected={detectedKpis} />}
+</TabsContent>
+<TabsContent value="weekly" className="space-y-6">
+  {activeTab === "weekly" && <WeeklySection ds={ds} detected={detectedKpis} />}
+</TabsContent>
+<TabsContent value="queues" className="space-y-6">
   {activeTab === "queues" && <QueuesSection ds={ds} month={month} detected={detectedKpis} activeKpi={activeKpi} setActiveKpi={setActiveKpi} />}
 </TabsContent>
-
-        <TabsContent value="excl" className="space-y-6">
-          {activeTab === "excl" && <ExclusionSection ds={ds} month={month} detected={detectedKpis} />}
-        </TabsContent>
-
-        <TabsContent value="quality" className="space-y-6">
-          {activeTab === "quality" && <QualityReopenSection ds={ds} month={month} detected={detectedKpis} />}
-        </TabsContent>
-
-        {ds.pcms.length > 0 && (
-          <TabsContent value="ksl5b" className="space-y-6">
-            {activeTab === "ksl5b" && <Ksl5bDetail ds={ds} month={month} />}
-          </TabsContent>
-        )}
+<TabsContent value="excl" className="space-y-6">
+  {activeTab === "excl" && <ExclusionSection ds={ds} month={month} detected={detectedKpis} />}
+</TabsContent>
+<TabsContent value="quality" className="space-y-6">
+  {activeTab === "quality" && <QualityReopenSection ds={ds} month={month} detected={detectedKpis} />}
+</TabsContent>
+{ds.pcms.length > 0 && (
+  <TabsContent value="ksl5b" className="space-y-6">
+    {activeTab === "ksl5b" && <Ksl5bDetail ds={ds} month={month} />}
+  </TabsContent>
+)}
       </Tabs>
     </main>
   );
