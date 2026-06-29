@@ -18,6 +18,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -26,6 +30,8 @@ jobs:
           node-version: 24
 
       - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -38,16 +44,8 @@ jobs:
           cp _headers dist/_headers
           cp _redirects dist/_redirects
 
-      - name: Deploy to Cloudflare Pages
-        id: deploy
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
-          wranglerVersion: "3.90.0"
-          packageManager: bun
-          command: pages deploy dist --project-name=kpi-insights-hub
+      - name: Verify Wrangler auth
+        run: bunx wrangler whoami
 
-      - name: Print deployment URL
-        run: echo "${{ steps.deploy.outputs.deployment-url }}"
+      - name: Deploy to Cloudflare Pages
+        run: bunx wrangler pages deploy dist --project-name=kpi-insights-hub --branch main
