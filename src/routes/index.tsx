@@ -1766,20 +1766,29 @@ const Ksl5bDetail = React.memo(function Ksl5bDetail({
 
   const visibleRows = useMemo(() => filtered.slice(0, 200), [filtered]);
 
-  const reasonMix = useMemo(() => {
-    const map = new Map<number, { id: number; label: string; color: string; ko: number; nok: number; total: number }>();
-    PCMS_CATEGORIES.forEach((c) =>
-      map.set(c.id, { id: c.id, label: `${c.id}. ${c.label}`, color: c.color, ko: 0, nok: 0, total: 0 })
-    );
-    filtered.forEach((r) => {
-      const m = map.get(r.category);
-      if (!m) return;
-      if (r.status === "KO") m.ko += 1;
-      else if (r.status === "NOK") m.nok += 1;
-      m.total += 1;
-    });
-    return [...map.values()].filter((m) => m.total > 0).sort((a, b) => b.total - a.total);
-  }, [filtered]);
+const reasonMix = useMemo(() => {
+  const map = new Map<string, { id: number; label: string; color: string; ko: number; nok: number; total: number }>();
+
+  filtered.forEach((r) => {
+    const key = String(r.category ?? r.categoryLabel ?? "unknown");
+    const existing = map.get(key) ?? {
+      id: Number(r.category ?? 0),
+      label: r.categoryLabel || `Category ${r.category ?? "?"}`,
+      color: "var(--muted-foreground)",
+      ko: 0,
+      nok: 0,
+      total: 0,
+    };
+
+    if (r.status === "KO") existing.ko += 1;
+    else if (r.status === "NOK") existing.nok += 1;
+    existing.total += 1;
+
+    map.set(key, existing);
+  });
+
+  return [...map.values()].sort((a, b) => b.total - a.total);
+}, [filtered]);
 
   const agents = useMemo(() => pcmsTopAgents(filtered, 10), [filtered]);
   const weekly = useMemo(() => pcmsWeeklyCounts(scopedByMonth), [scopedByMonth]);
@@ -1936,9 +1945,9 @@ const Ksl5bDetail = React.memo(function Ksl5bDetail({
                   <TableCell className="py-1 text-xs">{r.monthName}</TableCell>
                   <TableCell className="py-1 text-xs">
                     <span className="inline-flex items-center gap-1">
-                      <span className="h-2 w-2 rounded-full" style={{ background: PCMS_CATEGORIES.find((c) => c.id === r.category)?.color ?? "var(--muted-foreground)" }} />
-                      {r.category}. {r.categoryLabel}
-                    </span>
+  <span className="h-2 w-2 rounded-full bg-muted-foreground" />
+  {r.categoryLabel}
+</span>
                   </TableCell>
                   <TableCell className="py-1 text-xs">{r.reason}</TableCell>
                   <TableCell className="py-1 text-xs">{r.agent}</TableCell>
@@ -1979,10 +1988,10 @@ function AgentTip({ active, payload }: any) {
           const c = PCMS_CATEGORIES.find((x) => x.id === Number(cat));
           return (
             <p key={cat} className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full" style={{ background: c?.color ?? "var(--muted-foreground)" }} />
-              <span className="flex-1 truncate text-muted-foreground">{c?.label ?? `Cat ${cat}`}</span>
-              <span className="font-semibold tabular-nums">{count}</span>
-            </p>
+  <span className="h-2 w-2 rounded-full bg-muted-foreground" />
+  <span className="flex-1 truncate text-muted-foreground">Category {cat}</span>
+  <span className="font-semibold tabular-nums">{count}</span>
+</p>
           );
         })}
       </div>
