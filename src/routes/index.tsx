@@ -1752,17 +1752,20 @@ const Ksl5bDetail = React.memo(function Ksl5bDetail({
   const searchLower = search.trim().toLowerCase();
 
   const filtered = useMemo(() => {
-    return scoped.filter((r) => {
-      if (activeCat !== null && r.category !== activeCat) return false;
-      if (activeAgent !== null && r.agent !== activeAgent) return false;
-      if (!searchLower) return true;
-      return (
-        r.ticket.toLowerCase().includes(searchLower) ||
-        r.reason.toLowerCase().includes(searchLower) ||
-        r.agent.toLowerCase().includes(searchLower)
-      );
-    });
-  }, [scoped, activeCat, activeAgent, searchLower]);
+  const q = search.trim().toLowerCase();
+
+  return scoped.filter((r) => {
+    const ticket = String(r.ticket ?? "").toLowerCase();
+    const reason = String(r.reason ?? "").toLowerCase();
+    const agent = String(r.agent ?? "");
+
+    if (activeCat !== null && r.category !== activeCat) return false;
+    if (activeAgent !== null && agent !== activeAgent) return false;
+    if (!q) return true;
+
+    return ticket.includes(q) || reason.includes(q) || agent.toLowerCase().includes(q);
+  });
+}, [scoped, activeCat, activeAgent, search]);
 
   const visibleRows = useMemo(() => filtered.slice(0, 200), [filtered]);
 
