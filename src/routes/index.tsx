@@ -1492,12 +1492,16 @@ function RichTip({ active, payload, label, meta }: any) {
   const delta = prev == null ? null : rate - prev;
   const gap = rate - meta.target;
   const ragColor =
-    row.rag === "green" ? "var(--success)"
-    : row.rag === "amber" ? "var(--warning)"
-    : row.rag === "red" ? "var(--danger)"
-    : "var(--muted-foreground)";
+    row.rag === "green"
+      ? "var(--success)"
+      : row.rag === "amber"
+        ? "var(--warning)"
+        : row.rag === "red"
+          ? "var(--danger)"
+          : "var(--muted-foreground)";
   const ragText = ragLabel(row.rag ?? "none", meta.isKM);
   const gapGood = meta.isKM ? gap <= 0 : gap >= 0;
+
   return (
     <div
       role="tooltip"
@@ -1507,25 +1511,41 @@ function RichTip({ active, payload, label, meta }: any) {
         <span className="font-semibold">{label}</span>
         <span
           className="rounded-full border px-1.5 py-0.5 text-[9px] font-bold tracking-wide"
-          style={{ color: ragColor, borderColor: ragColor, backgroundColor: `color-mix(in oklab, ${ragColor} 15%, transparent)` }}
+          style={{
+            color: ragColor,
+            borderColor: ragColor,
+            backgroundColor: `color-mix(in oklab, ${ragColor} 15%, transparent)`,
+          }}
         >
           {ragText}
         </span>
       </div>
       <p className="tabular-nums">
         <span className="text-muted-foreground">Rate</span>{" "}
-        <span className="font-semibold" style={{ color: ragColor }}>{rate.toFixed(1)}%</span>
+        <span className="font-semibold" style={{ color: ragColor }}>
+          {rate.toFixed(1)}%
+        </span>
       </p>
       <p className="tabular-nums text-muted-foreground">
         Target {meta.targetLabel} ·{" "}
         <span style={{ color: gapGood ? "var(--success)" : "var(--danger)" }}>
-          {gap >= 0 ? "+" : ""}{gap.toFixed(1)}pp
+          {gap >= 0 ? "+" : ""}
+          {gap.toFixed(1)}pp
         </span>
       </p>
       {delta != null && (
         <p className="tabular-nums text-muted-foreground">
           Δ vs prior{" "}
-          <span style={{ color: (meta.isKM ? delta < 0 : delta > 0) ? "var(--success)" : delta === 0 ? "var(--muted-foreground)" : "var(--danger)" }}>
+          <span
+            style={{
+              color:
+                (meta.isKM ? delta < 0 : delta > 0)
+                  ? "var(--success)"
+                  : delta === 0
+                    ? "var(--muted-foreground)"
+                    : "var(--danger)",
+            }}
+          >
             {delta > 0 ? "▲" : delta < 0 ? "▼" : "■"} {Math.abs(delta).toFixed(1)}pp
           </span>
         </p>
@@ -1545,13 +1565,14 @@ function amberBound(meta: { target: number; isKM: boolean }) {
 }
 
 // Inject prev/delta on each datum so the tooltip can show week-over-week change.
-function withDeltas<T extends { rate: number }>(rows: T[]): (T & { prev: number | null; delta: number | null })[] {
+function withDeltas<T extends { rate: number }>(
+  rows: T[],
+): (T & { prev: number | null; delta: number | null })[] {
   return rows.map((r, i) => {
     const prev = i > 0 ? rows[i - 1].rate : null;
     return { ...r, prev, delta: prev == null ? null : r.rate - prev };
   });
 }
-
 /* ─────────────────────────────────────────────────── KSL-4 & KM-1 FOCUS */
 
 const QualityReopenSection = React.memo(function QualityReopenSection({ ds, month, detected }: { ds: Dataset; month: string | null; detected: KpiCode[] }) {
