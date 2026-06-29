@@ -1929,8 +1929,8 @@ const Ksl5bDetail = React.memo(function Ksl5bDetail({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.slice(0, 500).map((r, i) => (
-                <TableRow key={`${r.ticket}-${i}`}>
+  {visibleRows.map((r, i) => (
+    <TableRow key={`${r.ticket}-${i}`}>
                   <TableCell className="py-1 text-xs font-mono">{r.ticket}</TableCell>
                   <TableCell className="py-1 text-xs">W{r.weekNum ?? "—"}</TableCell>
                   <TableCell className="py-1 text-xs">{r.monthName}</TableCell>
@@ -1953,9 +1953,11 @@ const Ksl5bDetail = React.memo(function Ksl5bDetail({
             </TableBody>
           </Table>
         </div>
-        {filtered.length > 500 && (
-          <p className="mt-2 text-center text-[10px] text-muted-foreground">Showing first 500 of {filtered.length.toLocaleString()} rows · narrow with filters.</p>
-        )}
+        {filtered.length > visibleRows.length && (
+  <p className="mt-2 text-center text-10px text-muted-foreground">
+    Showing first {visibleRows.length.toLocaleString()} of {filtered.length.toLocaleString()} rows; narrow with filters.
+  </p>
+)}
       </Panel>
     </>
   );
