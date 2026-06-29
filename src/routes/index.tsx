@@ -1102,21 +1102,21 @@ const QueuesSection = React.memo(function QueuesSection({
     [ds, safe, month],
   );
 
-  const [activeQueue, setActiveQueue] = useState<string>("");
+  const [activeQueue, setActiveQueue] = useState<string>("__none__");
 
-  useEffect(() => {
-    if (queues.length === 0) {
-      setActiveQueue("");
-      return;
-    }
+useEffect(() => {
+  if (queues.length === 0) {
+    setActiveQueue("__none__");
+    return;
+  }
 
-    setActiveQueue((current) => {
-      if (queues.some((q) => q.queue === current)) return current;
-      return queues[0].queue;
-    });
-  }, [queues]);
+  setActiveQueue((current) => {
+    if (current !== "__none__" && queues.some((q) => q.queue === current)) return current;
+    return queues[0].queue;
+  });
+}, [queues]);
 
-  const queue = activeQueue;
+const queue = activeQueue === "__none__" ? "" : activeQueue;
 
   const weekly = useMemo(() => {
     if (!queue) return [];
@@ -1149,18 +1149,19 @@ const QueuesSection = React.memo(function QueuesSection({
           KPI
         </span>
 
-        <Select value={safe} onValueChange={(v) => setActiveKpi(v as KpiCode)}>
-          <SelectTrigger className="h-9 w-72 rounded-full glass">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {detected.map((c) => (
-              <SelectItem key={c} value={c}>
-                {c} — {KPI_META[c].what}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Select value={activeQueue} onValueChange={setActiveQueue}>
+  <SelectTrigger className="h-9 w-64 rounded-full glass">
+    <SelectValue placeholder="Select queue" />
+  </SelectTrigger>
+  <SelectContent>
+    <SelectItem value="__none__">Select queue</SelectItem>
+    {queues.map((q) => (
+      <SelectItem key={q.queue} value={q.queue}>
+        {q.queue} · {q.total} tickets
+      </SelectItem>
+    ))}
+  </SelectContent>
+</Select>
 
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Queue
@@ -1184,11 +1185,11 @@ const QueuesSection = React.memo(function QueuesSection({
         </Badge>
       </div>
 
-            <Panel
-        title={`${safe} · ${queue || "—"} · weekly trend`}
-        subtitle={meta.what}
-        badge={meta.targetLabel}
-      >
+    <Panel
+  title={`${safe} · ${queue || "—"} · weekly trend`}
+  subtitle={meta.what}
+  badge={meta.targetLabel}
+>
         {weeklyData.length === 0 ? (
           <Empty message="No weekly data for this queue." />
         ) : (
