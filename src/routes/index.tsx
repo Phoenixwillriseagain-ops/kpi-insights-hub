@@ -60,26 +60,39 @@ function Dashboard() {
   const [exclMappings, setExclMappings] = useState<SheetMapping[]>([]);
   const [override, setOverride] = useState(false);
 
-const ref = useRef<HTMLInputElement>(null);
+  const ref = useRef<HTMLInputElement>(null);
 
-const toggleTheme = () => {
-  setDark((d) => {
-    const next = !d;
-    document.documentElement.classList.toggle("dark", next);
-    return next;
-  });
-};
+  useEffect(() => {
+    console.log("dataset changed", dataset ? {
+      months: dataset.months.length,
+      weeks: dataset.weeks.length,
+      kpis: Object.keys(dataset.sla).length,
+      pcms: dataset.pcms.length,
+    } : null);
+  }, [dataset]);
+
+  const toggleTheme = () => {
+    setDark((d) => {
+      const next = !d;
+      document.documentElement.classList.toggle("dark", next);
+      return next;
+    });
+  };
 
   const addFiles = useCallback(async (slot: Slot, list: FileList | File[]) => {
     const arr = Array.from(list);
     const loaded: LoadedFile[] = arr.map((f) => ({ name: f.name, file: f }));
     setFiles((s) => ({ ...s, [slot]: [...s[slot], ...loaded] }));
-    setReport(null); setOverride(false); setExclMappings([]);
+    setReport(null);
+    setOverride(false);
+    setExclMappings([]);
   }, []);
 
   const removeFile = (slot: Slot, idx: number) => {
     setFiles((s) => ({ ...s, [slot]: s[slot].filter((_, i) => i !== idx) }));
-    setReport(null); setOverride(false); setExclMappings([]);
+    setReport(null);
+    setOverride(false);
+    setExclMappings([]);
   };
 
   const canRun = files.sla.some((f) => !f.error && f.file);
@@ -90,88 +103,150 @@ const toggleTheme = () => {
     try {
       const toBufs = async (items: LoadedFile[]) =>
         Promise.all(
-          items.filter((f) => f.file).map(async (f) => ({ name: f.name, buf: await f.file!.arrayBuffer() })),
+          items.filter((f) => f.file).map(async (f) => ({
+            name: f.name,
+            buf: await f.file!.arrayBuffer(),
+          })),
         );
+
       const [sla, breach, excl] = await perfMeasure("read files → ArrayBuffer", async () =>
         Promise.all([toBufs(files.sla), toBufs(files.breach), toBufs(files.excl)]),
       );
+
       const totalBytes = [...sla, ...breach, ...excl].reduce((n, x) => n + x.buf.byteLength, 0);
       perfMark("workbook bytes", `${(totalBytes / 1048576).toFixed(2)} MB`);
 
       const result = await perfMeasure("worker: parse + buildDataset", async () => {
-  // When crossOriginIsolated is false (Cloudflare Pages without COOP/COEP headers),
-  // module workers may be silently blocked and never fire onmessage/onerror,
-  // leaving setBusy(true) stuck forever. Fall back to main-thread processing.
-  if (!self.crossOriginIsolated) {
-    const [{ buildDataset }, { buildReport, buildExclMappings }, XLSX] = await Promise.all([
-      import("@/lib/analyzer/parse"),
-      import("@/lib/analyzer/validate"),
-      import("xlsx"),
-    ]);
-    const read = (items: { name: string; buf: ArrayBuffer }[]) =>
-      items.map((it) => ({ name: it.name, wb: XLSX.read(it.buf, { type: "array" }) }));
-    const slaFiles    = read(sla);
-    const breachFiles = read(breach);
-    const exclFiles   = read(excl);
-    const report       = buildReport(slaFiles, breachFiles, exclFiles);
-    const exclMappings = buildExclMappings(exclFiles);
-    const ds = buildDataset(
-      slaFiles.map((f) => f.wb),
-      breachFiles.map((f) => f.wb),
-      exclFiles.map((f) => f.wb),
-    );
-    return { ok: true, report, exclMappings, ds } as WorkerOutput;
-  }
-  // Worker path: only reached when crossOriginIsolated = true (COOP+COEP active).
-  const worker = new Worker(new URL("../lib/analyzer/worker.ts", import.meta.url), { type: "module" });
-  const TIMEOUT_MS = 60_000;
-  try {
-    return await new Promise<WorkerOutput>((resolve, reject) => {
-      const timer = setTimeout(
-        () => reject(new Error("Analysis timed out after 60 s — try a smaller file or reload.")),
-        TIMEOUT_MS,
-      );
-      worker.onmessage = (e: MessageEvent<WorkerOutput>) => { clearTimeout(timer); resolve(e.data); };
-      worker.onerror   = (e) => { clearTimeout(timer); reject(new Error(e.message || "Worker error")); };
-      const payload: WorkerInput = { sla, breach, excl };
-      const transfer = [...sla, ...breach, ...excl].map((x) => x.buf);
-      worker.postMessage(payload, transfer);
-    });
-  } finally {
-    worker.terminate();
-  }
-});
+        if (!self.crossOriginIsolated) {
+          const [{ buildDataset }, { buildReport, buildExclMappings }, XLSX] = await Promise.all([
+            import("@/lib/analyzer/parse"),
+            import("@/lib/analyzer/validate"),
+            import("xlsx"),
+          ]);
+
+          const read = (items: { name: string; buf: ArrayBuffer }[]) =>
+            items.map((it) => ({
+              name: it.name,
+              wb: XLSX.read(it.buf, { type: "array" }),
+            }));
+
+          const slaFiles = read(sla);
+          const breachFiles = read(breach);
+          const exclFiles = read(excl);
+
+          const report = buildReport(slaFiles, breachFiles, exclFiles);
+          const exclMappings = buildExclMappings(exclFiles);
+          const ds = buildDataset(
+            slaFiles.map((f) => f.wb),
+            breachFiles.map((f) => f.wb),
+            exclFiles.map((f) => f.wb),
+          );
+
+          return { ok: true, report, exclMappings, ds } as WorkerOutput;
+        }
+
+        const worker = new Worker(new URL("../lib/analyzer/worker.ts", import.meta.url), { type: "module" });
+        const TIMEOUT_MS = 60_000;
+
+        try {
+          return await new Promise<WorkerOutput>((resolve, reject) => {
+            const timer = setTimeout(
+              () => reject(new Error("Analysis timed out after 60 s — try a smaller file or reload.")),
+              TIMEOUT_MS,
+            );
+
+            worker.onmessage = (e: MessageEvent<WorkerOutput>) => {
+              clearTimeout(timer);
+              resolve(e.data);
+            };
+
+            worker.onerror = (e) => {
+              clearTimeout(timer);
+              reject(new Error(e.message || "Worker error"));
+            };
+
+            const payload: WorkerInput = { sla, breach, excl };
+            const transfer = [...sla, ...breach, ...excl].map((x) => x.buf);
+            worker.postMessage(payload, transfer);
+          });
+        } finally {
+          worker.terminate();
+        }
+      });
+
       if (!result.ok) throw new Error(result.error);
+
+      console.log("analysis result received", {
+        ok: result.ok,
+        reportOk: result.report?.ok,
+        exclMappings: result.exclMappings?.length ?? 0,
+      });
+
       setReport(result.report);
       setExclMappings(result.exclMappings);
+
       if (!result.report.ok && !override) {
         toast.error("Fix required columns before running", {
-          description: "See the validation panel for details, or toggle \u201CRun anyway\u201D to bypass.",
+          description: "See the validation panel for details, or toggle “Run anyway” to bypass.",
         });
         return;
       }
+
       const ds = result.ds;
+
+      console.log("dataset about to set", {
+        months: ds.months.length,
+        weeks: ds.weeks.length,
+        kpis: Object.keys(ds.sla).length,
+        pcms: ds.pcms.length,
+      });
+
       if (!Object.keys(ds.sla).length) {
-        toast.error("No KPI sheets detected", { description: "Sheet names should match KSL-1, KSL-2a, …, KM-1, KM-2." });
+        toast.error("No KPI sheets detected", {
+          description: "Sheet names should match KSL-1, KSL-2a, …, KM-1, KM-2.",
+        });
         return;
       }
+
       setDataset(ds);
       setActiveMonth(null);
+
       perfMark("dataset ready", `${ds.months.length}mo · ${ds.weeks.length}wk · ${Object.keys(ds.sla).length} KPIs`);
-      toast.success("Analysis ready", { description: `${ds.months.length} months · ${ds.weeks.length} weeks · ${Object.keys(ds.sla).length} KPIs` });
+      toast.success("Analysis ready", {
+        description: `${ds.months.length} months · ${ds.weeks.length} weeks · ${Object.keys(ds.sla).length} KPIs`,
+      });
     } catch (e) {
       toast.error("Analysis failed", { description: e instanceof Error ? e.message : String(e) });
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const reset = () => { setDataset(null); setFiles({ sla: [], breach: [], excl: [] }); setReport(null); setOverride(false); setExclMappings([]); };
+  const reset = () => {
+    setDataset(null);
+    setFiles({ sla: [], breach: [], excl: [] });
+    setReport(null);
+    setOverride(false);
+    setExclMappings([]);
+  };
 
   return (
     <div className="min-h-screen">
       <Toaster richColors position="top-right" />
       <PerfPanel />
-      <Header onToggleTheme={toggleTheme} dark={dark} onReset={dataset ? reset : undefined} onExport={dataset ? async () => { const m = await perfMeasure("import xlsx + run export", () => import("@/lib/analyzer/export")); await perfMeasure("exportDatasetWorkbook", () => m.exportDatasetWorkbook(dataset, activeMonth)); } : undefined} />
-
+      <Header
+        onToggleTheme={toggleTheme}
+        dark={dark}
+        onReset={dataset ? reset : undefined}
+        onExport={
+          dataset
+            ? async () => {
+                const m = await perfMeasure("import xlsx + run export", () => import("@/lib/analyzer/export"));
+                await perfMeasure("exportDatasetWorkbook", () => m.exportDatasetWorkbook(dataset, activeMonth));
+              }
+            : undefined
+        }
+      />
 
       {!dataset ? (
         <UploadHero
@@ -585,12 +660,17 @@ function Analysis({
     () => KPI_ORDER.filter((c) => ds.sla[c]?.length),
     [ds],
   );
+
   const [activeTab, setActiveTab] = useState<string>("overview");
   const mountedTabs = useMountedTabs(activeTab);
 
+  useEffect(() => {
+    console.log("activeTab", activeTab);
+    console.log("mountedTabs", [...mountedTabs]);
+  }, [activeTab, mountedTabs]);
+
   return (
     <main className="mx-auto max-w-7xl px-6 py-8">
-      {/* Period chips */}
       <div
         className="mb-6 flex flex-wrap items-center gap-2"
         role="group"
@@ -599,51 +679,71 @@ function Analysis({
         <span className="mr-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Period</span>
         <Chip active={month === null} onClick={() => setMonth(null)} label="All months">All months</Chip>
         {ds.months.map((m) => (
-          <Chip key={m} active={month === m} onClick={() => setMonth(m)} label={monthLabel(m)}>{monthLabel(m)}</Chip>
+          <Chip key={m} active={month === m} onClick={() => setMonth(m)} label={monthLabel(m)}>
+            {monthLabel(m)}
+          </Chip>
         ))}
       </div>
 
-      <Tabs value={activeTab} onValueChange={(v) => { perfMark("tab switch", `${activeTab} → ${v}`); setActiveTab(v); }} className="space-y-6">
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => {
+          perfMark("tab switch", `${activeTab} → ${v}`);
+          setActiveTab(v);
+        }}
+        className="space-y-6"
+      >
         <TabsList className="glass h-12 w-full justify-start gap-1 rounded-2xl p-1.5">
           <TabTrigger value="overview" icon={BarChart3}>Overview</TabTrigger>
           <TabTrigger value="monthly" icon={LineChartIcon}>Monthly Trend</TabTrigger>
-          <TabTrigger value="weekly"  icon={Activity}>Weekly Trend</TabTrigger>
-          <TabTrigger value="queues"  icon={Layers}>Queue Analysis</TabTrigger>
-          <TabTrigger value="excl"    icon={Filter}>Exclusion Impact</TabTrigger>
+          <TabTrigger value="weekly" icon={Activity}>Weekly Trend</TabTrigger>
+          <TabTrigger value="queues" icon={Layers}>Queue Analysis</TabTrigger>
+          <TabTrigger value="excl" icon={Filter}>Exclusion Impact</TabTrigger>
           <TabTrigger value="quality" icon={CheckCircle2}>KSL-4 &amp; KM-1</TabTrigger>
           {ds.pcms.length > 0 && <TabTrigger value="ksl5b" icon={Users}>KSL-5b Detail</TabTrigger>}
         </TabsList>
 
-        {/* Each tab content is only mounted when first visited, then kept alive */}
         <TabsContent value="overview" className="space-y-6">
-          {mountedTabs.has("overview") && <OverviewSection ds={ds} month={month} detected={detectedKpis} />}
+          {activeTab === "overview" && <OverviewSection ds={ds} month={month} detected={detectedKpis} />}
         </TabsContent>
+
         <TabsContent value="monthly" className="space-y-6">
-          {mountedTabs.has("monthly") && <MonthlySection ds={ds} detected={detectedKpis} />}
+          {activeTab === "monthly" && <MonthlySection ds={ds} detected={detectedKpis} />}
         </TabsContent>
+
         <TabsContent value="weekly" className="space-y-6">
-          {mountedTabs.has("weekly") && <WeeklySection ds={ds} detected={detectedKpis} />}
+          {activeTab === "weekly" && <WeeklySection ds={ds} detected={detectedKpis} />}
         </TabsContent>
+
         <TabsContent value="queues" className="space-y-6">
-          {mountedTabs.has("queues") && <QueuesSection ds={ds} month={month} detected={detectedKpis} activeKpi={activeKpi} setActiveKpi={setActiveKpi} />}
+          {activeTab === "queues" && (
+            <QueuesSection
+              ds={ds}
+              month={month}
+              detected={detectedKpis}
+              activeKpi={activeKpi}
+              setActiveKpi={setActiveKpi}
+            />
+          )}
         </TabsContent>
+
         <TabsContent value="excl" className="space-y-6">
-          {mountedTabs.has("excl") && <ExclusionSection ds={ds} month={month} detected={detectedKpis} />}
+          {activeTab === "excl" && <ExclusionSection ds={ds} month={month} detected={detectedKpis} />}
         </TabsContent>
+
         <TabsContent value="quality" className="space-y-6">
-          {mountedTabs.has("quality") && <QualityReopenSection ds={ds} month={month} detected={detectedKpis} />}
+          {activeTab === "quality" && <QualityReopenSection ds={ds} month={month} detected={detectedKpis} />}
         </TabsContent>
+
         {ds.pcms.length > 0 && (
           <TabsContent value="ksl5b" className="space-y-6">
-            {mountedTabs.has("ksl5b") && <Ksl5bDetail ds={ds} month={month} />}
+            {activeTab === "ksl5b" && <Ksl5bDetail ds={ds} month={month} />}
           </TabsContent>
         )}
       </Tabs>
-
     </main>
   );
 }
-
 function Chip({ children, active, onClick, label }: { children: React.ReactNode; active: boolean; onClick: () => void; label?: string }) {
   return (
     <button
@@ -1020,24 +1120,54 @@ function WeeklyTable({ rows, isKM }: { rows: WeeklyTableRow[]; isKM: boolean }) 
 
 const QueuesSection = React.memo(function QueuesSection({
   ds, month, detected, activeKpi, setActiveKpi,
-}: { ds: Dataset; month: string | null; detected: KpiCode[]; activeKpi: KpiCode; setActiveKpi: (k: KpiCode) => void }) {
+}: {
+  ds: Dataset;
+  month: string | null;
+  detected: KpiCode[];
+  activeKpi: KpiCode;
+  setActiveKpi: (k: KpiCode) => void;
+}) {
   const safe = detected.includes(activeKpi) ? activeKpi : (detected[0] ?? "KSL-2c");
   const meta = KPI_META[safe];
+
   const queues = useMemo(
     () => queueBreakdown(ds, safe, month),
     [ds, safe, month],
   );
+
   const [activeQueue, setActiveQueue] = useState<string>("");
+
   const queue = queues.find((q) => q.queue === activeQueue)?.queue ?? queues[0]?.queue ?? "";
+
+  useEffect(() => {
+    console.log("queues changed", queues.map((q) => q.queue));
+    console.log("activeQueue before sync", activeQueue);
+    console.log("safe KPI", safe, "month", month);
+  }, [queues, activeQueue, safe, month]);
+
+  useEffect(() => {
+    if (!queues.some((q) => q.queue === activeQueue)) {
+      setActiveQueue(queues[0]?.queue ?? "");
+    }
+  }, [queues, activeQueue]);
 
   const weekly = useMemo(() => {
     if (!queue) return [];
-    return weeklyQueueSummary(ds, safe, queue, { lastN: 6 }).map((p) => ({ ...p, label: weekLabel(p.label) }));
+    return weeklyQueueSummary(ds, safe, queue, { lastN: 6 }).map((p) => ({
+      ...p,
+      label: weekLabel(p.label),
+    }));
   }, [ds, safe, queue]);
+
   const weeklyData = withDeltas(weekly);
   const amber = amberBound(meta);
+
   const dotColor = (rag: string) =>
-    rag === "green" ? "var(--success)" : rag === "amber" ? "var(--warning)" : rag === "red" ? "var(--danger)" : "var(--muted-foreground)";
+    rag === "green" ? "var(--success)"
+    : rag === "amber" ? "var(--warning)"
+    : rag === "red" ? "var(--danger)"
+    : "var(--muted-foreground)";
+
   const values = weeklyData.map((d) => d.rate).filter((v) => Number.isFinite(v));
   const minY = values.length ? Math.floor(Math.min(...values, meta.target) - 1.5) : "auto";
   const maxY = values.length ? Math.ceil(Math.max(...values, meta.target) + 1.5) : "auto";
@@ -1054,48 +1184,84 @@ const QueuesSection = React.memo(function QueuesSection({
             ))}
           </SelectContent>
         </Select>
+
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Queue</span>
         <Select value={queue} onValueChange={setActiveQueue}>
           <SelectTrigger className="h-9 w-64 rounded-full glass"><SelectValue placeholder="Select queue" /></SelectTrigger>
           <SelectContent>
             {queues.map((q) => (
-              <SelectItem key={q.queue} value={q.queue}>{q.queue} · {q.total} tickets</SelectItem>
+              <SelectItem key={q.queue} value={q.queue}>
+                {q.queue} · {q.total} tickets
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
+
         <Badge variant="secondary" className="ml-auto">{queues.length} queues</Badge>
       </div>
 
-      <Panel title={`${safe} · ${queue || "—"} · weekly trend`} subtitle={meta.what} badge={meta.targetLabel} exportName={`queue_weekly_${safe}_${queue}`}>
-        {weeklyData.length === 0
-          ? <Empty message="No weekly data for this queue." />
-          : (
-            <>
-              <ChartFrame height={260}>{(width) => (
+      <Panel
+        title={`${safe} · ${queue || "—"} · weekly trend`}
+        subtitle={meta.what}
+        badge={meta.targetLabel}
+        exportName={`queue_weekly_${safe}_${queue}`}
+      >
+        {weeklyData.length === 0 ? (
+          <Empty message="No weekly data for this queue." />
+        ) : (
+          <>
+            <ChartFrame height={260}>
+              {(width) => (
                 <LineChart width={width} height={260} data={weeklyData} margin={{ top: 26, right: 28, left: 4, bottom: 6 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-                  <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} domain={[minY as number | "auto", maxY as number | "auto"]} />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                    tickFormatter={(v) => `${Math.round(v)}%`}
+                    domain={[minY as number | "auto", maxY as number | "auto"]}
+                  />
                   <Tooltip content={<RichTip meta={meta} />} cursor={{ stroke: "var(--border)", strokeDasharray: "3 3" }} />
-                  <ReferenceLine y={meta.target} stroke="var(--success)" strokeDasharray="5 4" ifOverflow="extendDomain"
-                    label={{ value: `target ${meta.targetLabel}`, fontSize: 10, fill: "var(--success)", position: "insideTopRight" }} />
-                  <ReferenceLine y={amber} stroke="var(--warning)" strokeDasharray="2 4" ifOverflow="extendDomain"
-                    label={{ value: meta.isKM ? "watch ceiling" : "watch floor", fontSize: 10, fill: "var(--warning)", position: "insideBottomRight" }} />
-                  <Line type="monotone" dataKey="rate" stroke={meta.color} strokeWidth={2.5} isAnimationActive={false}
+                  <ReferenceLine
+                    y={meta.target}
+                    stroke="var(--success)"
+                    strokeDasharray="5 4"
+                    ifOverflow="extendDomain"
+                    label={{ value: `target ${meta.targetLabel}`, fontSize: 10, fill: "var(--success)", position: "insideTopRight" }}
+                  />
+                  <ReferenceLine
+                    y={amber}
+                    stroke="var(--warning)"
+                    strokeDasharray="2 4"
+                    ifOverflow="extendDomain"
+                    label={{ value: meta.isKM ? "watch ceiling" : "watch floor", fontSize: 10, fill: "var(--warning)", position: "insideBottomRight" }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="rate"
+                    stroke={meta.color}
+                    strokeWidth={2.5}
+                    isAnimationActive={false}
                     dot={(props: any) => {
                       const { cx, cy, payload, index } = props;
                       return <circle key={index} cx={cx} cy={cy} r={5} fill={dotColor(payload.rag)} stroke={meta.color} strokeWidth={1.5} />;
                     }}
-                    activeDot={{ r: 7 }}>
-                    <LabelList dataKey="rate" position="top" offset={10}
+                    activeDot={{ r: 7 }}
+                  >
+                    <LabelList
+                      dataKey="rate"
+                      position="top"
+                      offset={10}
                       formatter={(v: number) => (Number.isFinite(v) ? `${v.toFixed(1)}%` : "")}
-                      style={{ fontSize: 11, fontWeight: 600, fill: "var(--foreground)" }} />
+                      style={{ fontSize: 11, fontWeight: 600, fill: "var(--foreground)" }}
+                    />
                   </Line>
                 </LineChart>
-              )}</ChartFrame>
-              <WeeklyTable rows={weeklyData} isKM={meta.isKM} />
-            </>
-          )}
+              )}
+            </ChartFrame>
+
+            <WeeklyTable rows={weeklyData} isKM={meta.isKM} />
+          </>
+        )}
       </Panel>
 
       <Panel title="All queues for this KPI" subtitle="Ranked by ticket volume — click a row to drill in">
@@ -1112,18 +1278,37 @@ const QueuesSection = React.memo(function QueuesSection({
             </TableHeader>
             <TableBody>
               {queues.map((q) => (
-                <TableRow key={q.queue} className={cn("cursor-pointer", q.queue === queue && "bg-primary/5")} onClick={() => setActiveQueue(q.queue)}>
+                <TableRow
+                  key={q.queue}
+                  className={cn("cursor-pointer", q.queue === queue && "bg-primary/5")}
+                  onClick={() => setActiveQueue(q.queue)}
+                >
                   <TableCell className="font-medium">{q.queue}</TableCell>
                   <TableCell className="text-right tabular-nums">{q.total.toLocaleString()}</TableCell>
                   <TableCell className="text-right tabular-nums">{q.breaches.toLocaleString()}</TableCell>
-                  <TableCell className="text-right font-semibold tabular-nums" style={{ color: q.rag === "green" ? "var(--success)" : q.rag === "amber" ? "var(--warning)" : q.rag === "red" ? "var(--danger)" : undefined }}>
+                  <TableCell
+                    className="text-right font-semibold tabular-nums"
+                    style={{
+                      color:
+                        q.rag === "green" ? "var(--success)"
+                        : q.rag === "amber" ? "var(--warning)"
+                        : q.rag === "red" ? "var(--danger)"
+                        : undefined,
+                    }}
+                  >
                     {q.display}
                   </TableCell>
-                  <TableCell className="text-right"><RagBadge rag={q.rag} isKM={meta.isKM} /></TableCell>
+                  <TableCell className="text-right">
+                    <RagBadge rag={q.rag} isKM={meta.isKM} />
+                  </TableCell>
                 </TableRow>
               ))}
               {queues.length === 0 && (
-                <TableRow><TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">No queues for this filter.</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
+                    No queues for this filter.
+                  </TableCell>
+                </TableRow>
               )}
             </TableBody>
           </Table>
@@ -1132,7 +1317,6 @@ const QueuesSection = React.memo(function QueuesSection({
     </>
   );
 });
-
 /* ─────────────────────────────────────────────────── EXCLUSION IMPACT */
 
 function ExclusionSection({ ds, month, detected }: { ds: Dataset; month: string | null; detected: KpiCode[] }) {
