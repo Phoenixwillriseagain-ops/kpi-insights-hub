@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Activity, AlertTriangle, ArrowDown, ArrowUp, BarChart3, CheckCircle2, ChevronRight, Download, FileSpreadsheet,
+  Activity, AlertTriangle, ArrowDown, ArrowUp, BarChart3, CheckCircle2, ChevronRight, FileSpreadsheet,
   Filter, Info, Layers, LineChart as LineChartIcon, Loader2, Moon, Pin, RefreshCw,
   Sparkles, Sun, Target, TrendingUp, Upload, Users, X,
 } from "lucide-react";
@@ -24,7 +24,6 @@ import {
   exclusionImpact, monthLabel, monthlySummary, overallByKpi, queueBreakdown,
   rawOverallByKpi, weekLabel, weeklySummary, weeklyQueueSummary,
 } from "@/lib/analyzer/compute";
-import { ExportMenu } from "@/components/ExportMenu";
 import { DeferredMount } from "@/components/DeferredMount";
 import { PCMS_CATEGORIES, pcmsTopAgents, pcmsWeeklyCounts } from "@/lib/analyzer/pcmsAnalytics";
 import type { ValidationReport, ValidationIssue, SheetMapping } from "@/lib/analyzer/validate";
@@ -235,18 +234,10 @@ function Dashboard() {
       <Toaster richColors position="top-right" />
       <PerfPanel />
       <Header
-        onToggleTheme={toggleTheme}
-        dark={dark}
-        onReset={dataset ? reset : undefined}
-        onExport={
-          dataset
-            ? async () => {
-                const m = await perfMeasure("import xlsx + run export", () => import("@/lib/analyzer/export"));
-                await perfMeasure("exportDatasetWorkbook", () => m.exportDatasetWorkbook(dataset, activeMonth));
-              }
-            : undefined
-        }
-      />
+  onToggleTheme={toggleTheme}
+  dark={dark}
+  onReset={dataset ? reset : undefined}
+/>
 
       {!dataset ? (
         <UploadHero
@@ -280,7 +271,7 @@ function Dashboard() {
 
 /* ────────────────────────────────────────────────────────────── HEADER */
 
-function Header({ onToggleTheme, dark, onReset, onExport }: { onToggleTheme: () => void; dark: boolean; onReset?: () => void; onExport?: () => void }) {
+function Header({ onToggleTheme, dark, onReset }: { onToggleTheme: () => void; dark: boolean; onReset?: () => void }) {
   return (
     <header className="sticky top-0 z-40 glass border-b border-border/50">
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-6 py-3">
@@ -292,11 +283,6 @@ function Header({ onToggleTheme, dark, onReset, onExport }: { onToggleTheme: () 
           <span className="text-[10px] uppercase tracking-widest text-muted-foreground">KPI & Breaches Analyzer</span>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          {onExport && (
-            <Button variant="outline" size="sm" onClick={onExport} className="gap-1.5">
-              <Download className="h-3.5 w-3.5" /> Export report
-            </Button>
-          )}
           {onReset && (
             <Button variant="ghost" size="sm" onClick={onReset} className="gap-1.5">
               <RefreshCw className="h-3.5 w-3.5" /> New analysis
@@ -920,7 +906,7 @@ const MonthlySection = React.memo(function MonthlySection({ ds, detected }: { ds
         const data = withDeltas(monthlySummary(ds, code).map((p) => ({ ...p, label: monthLabel(p.label) })));
         const amber = amberBound(meta);
         return (
-          <Panel key={code} title={code} subtitle={meta.what} badge={meta.targetLabel} exportName={`monthly_${code}`}>
+          <Panel key={code} title={code} subtitle={meta.what} badge={meta.targetLabel}>
             {data.length === 0
               ? <Empty message="No monthly data for this KPI." />
               : (
@@ -981,7 +967,7 @@ const WeeklySection = React.memo(function WeeklySection({ ds, detected }: { ds: 
         const minY = values.length ? Math.floor(Math.min(...values, meta.target) - 1.5) : "auto";
         const maxY = values.length ? Math.ceil(Math.max(...values, meta.target) + 1.5) : "auto";
         return (
-          <Panel key={code} title={`${code} · last 6 weeks`} subtitle={meta.what} badge={meta.targetLabel} exportName={`weekly_${code}`}>
+          <Panel key={code} title={`${code} · last 6 weeks`} subtitle={meta.what} badge={meta.targetLabel} >
             {data.length === 0
               ? <Empty message="No weekly data for this KPI." />
               : (
@@ -1193,7 +1179,7 @@ const QueuesSection = React.memo(function QueuesSection({
         title={`${safe} · ${queue || "—"} · weekly trend`}
         subtitle={meta.what}
         badge={meta.targetLabel}
-        exportName={`queue_weekly_${safe}_${queue || "none"}`}
+        }
       >
         {weeklyData.length === 0 ? (
           <Empty message="No weekly data for this queue." />
@@ -1402,19 +1388,33 @@ function Mini({ label, value }: { label: string; value: string }) {
 
 /* ─────────────────────────────────────────────────── Shared panel + helpers */
 
-function Panel({ title, subtitle, badge, exportName, children }: { title: string; subtitle?: string; badge?: string; exportName?: string; children: React.ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
+function Panel({
+  title,
+  subtitle,
+  badge,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  badge?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <section ref={ref} className="glass overflow-hidden rounded-2xl ring-soft">
+    <section className="glass overflow-hidden rounded-2xl ring-soft">
       <header className="flex items-center gap-3 border-b border-border/60 px-5 py-3">
         <div className="min-w-0">
           <h2 className="font-display text-sm font-bold leading-tight">{title}</h2>
           {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
         </div>
-        {badge && <Badge data-export-nowrap variant="secondary" className="ml-auto whitespace-nowrap text-[10px]">{badge}</Badge>}
-        {exportName && <div className={cn(badge ? "" : "ml-auto")}><ExportMenu targetRef={ref} name={exportName} /></div>}
+        {badge && (
+          <Badge variant="secondary" className="ml-auto whitespace-nowrap text-[10px]">
+            {badge}
+          </Badge>
+        )}
       </header>
-      <div className="p-4"><DeferredMount>{children}</DeferredMount></div>
+      <div className="p-4">
+        <DeferredMount>{children}</DeferredMount>
+      </div>
     </section>
   );
 }
@@ -1545,19 +1545,6 @@ function withDeltas<T extends { rate: number }>(rows: T[]): (T & { prev: number 
 
 /* ─────────────────────────────────────────────────── KSL-4 & KM-1 FOCUS */
 
-function ExportableTile({ ds, code, month }: { ds: Dataset; code: KpiCode; month: string | null }) {
-  const ref = useRef<HTMLDivElement>(null);
-  return (
-    <div ref={ref} className="relative">
-      <div className="absolute right-2 top-2 z-10">
-        <ExportMenu targetRef={ref} name={`quality_tile_${code}`} />
-      </div>
-      <KpiTile ds={ds} code={code} month={month} />
-    </div>
-  );
-}
-
-
 const QualityReopenSection = React.memo(function QualityReopenSection({ ds, month, detected }: { ds: Dataset; month: string | null; detected: KpiCode[] }) {
   const codes = (["KSL-4", "KM-1"] as KpiCode[]).filter((c) => detected.includes(c));
   if (codes.length === 0) {
@@ -1566,7 +1553,7 @@ const QualityReopenSection = React.memo(function QualityReopenSection({ ds, mont
   return (
     <>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {codes.map((c) => <ExportableTile key={c} ds={ds} code={c} month={month} />)}
+        {codes.map((c) => <KpiTile key={c} ds={ds} code={c} month={month} />)}
       </div>
 
 
@@ -1590,7 +1577,7 @@ const QualityReopenSection = React.memo(function QualityReopenSection({ ds, mont
             </div>
 
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-              <Panel title={`${code} · monthly trend`} subtitle={meta.what} badge={meta.targetLabel} exportName={`quality_monthly_${code}`}>
+              <Panel title={`${code} · monthly trend`} subtitle={meta.what} badge={meta.targetLabel}>
                 {monthly.length === 0 ? <Empty message="No monthly data." /> : (
                   <ChartFrame height={240}>{(width) => (
                     <LineChart width={width} height={240} data={monthly} margin={{ top: 22, right: 24, left: 0, bottom: 0 }}>
@@ -1617,7 +1604,7 @@ const QualityReopenSection = React.memo(function QualityReopenSection({ ds, mont
                 )}
               </Panel>
 
-              <Panel title={`${code} · last 6 weeks`} subtitle={meta.what} badge={meta.targetLabel} exportName={`quality_weekly_${code}`}>
+              <Panel title={`${code} · last 6 weeks`} subtitle={meta.what} badge={meta.targetLabel}>
                 {weekly.length === 0 ? <Empty message="No weekly data." /> : (
                   <>
                     <ChartFrame height={260}>{(width) => (
@@ -1648,7 +1635,7 @@ const QualityReopenSection = React.memo(function QualityReopenSection({ ds, mont
               </Panel>
             </div>
 
-            <Panel title={`${code} · queue breakdown`} subtitle="Ranked by ticket volume in the active period" exportName={`quality_queues_${code}`}>
+            <Panel title={`${code} · queue breakdown`} subtitle="Ranked by ticket volume in the active period" >
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -1775,7 +1762,7 @@ const Ksl5bDetail = React.memo(function Ksl5bDetail({ ds, month }: { ds: Dataset
       </div>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        <Panel title="Reason mix" subtitle="KO vs NOK count per reason category — sorted by volume" exportName="pcms_reasons">
+        <Panel title="Reason mix" subtitle="KO vs NOK count per reason category — sorted by volume">
           {reasonMix.length === 0 ? <Empty message="No PCms rows for this filter." /> : (
             <ChartFrame height={Math.max(280, reasonMix.length * 34)}>{(width) => (
               <BarChart width={width} height={Math.max(280, reasonMix.length * 34)} data={reasonMix} layout="vertical" margin={{ top: 6, right: 36, left: 12, bottom: 0 }}>
@@ -1793,7 +1780,7 @@ const Ksl5bDetail = React.memo(function Ksl5bDetail({ ds, month }: { ds: Dataset
           )}
         </Panel>
 
-        <Panel title={`Top agents by KO/NOK${activeWeek === "all" ? "" : " · " + weekLabel(activeWeek)}`} subtitle="Click a bar to filter the drill table" exportName="pcms_agents">
+        <Panel title={`Top agents by KO/NOK${activeWeek === "all" ? "" : " · " + weekLabel(activeWeek)}`} subtitle="Click a bar to filter the drill table" >
           {agents.length === 0 ? <Empty message="No agent data for this filter." /> : (
             <ChartFrame height={Math.max(260, agents.length * 32)}>{(width) => (
               <BarChart width={width} height={Math.max(260, agents.length * 32)} data={agents} layout="vertical" margin={{ top: 4, right: 24, left: 12, bottom: 0 }}>
@@ -1811,7 +1798,7 @@ const Ksl5bDetail = React.memo(function Ksl5bDetail({ ds, month }: { ds: Dataset
       </div>
 
 
-      <Panel title="KSL-5b weekly trend · PCms overlay" subtitle="Bars = PCms KO/NOK count per week (right axis). Line = KSL-5b conformity %." exportName="pcms_ksl5b_overlay">
+      <Panel title="KSL-5b weekly trend · PCms overlay" subtitle="Bars = PCms KO/NOK count per week (right axis). Line = KSL-5b conformity %.">
         {overlay.length === 0 ? <Empty message="No KSL-5b weekly data." /> : (
           <ChartFrame height={300}>{(width) => (
             <ComposedChart width={width} height={300} data={overlay} margin={{ top: 20, right: 28, left: 4, bottom: 4 }}>
