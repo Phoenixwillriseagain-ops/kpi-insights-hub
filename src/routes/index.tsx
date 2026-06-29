@@ -1084,11 +1084,14 @@ function WeeklyTable({ rows, isKM }: { rows: WeeklyTableRow[]; isKM: boolean }) 
     </div>
   );
 }
-
 /* ─────────────────────────────────────────────────── QUEUES */
 
 const QueuesSection = React.memo(function QueuesSection({
-  ds, month, detected, activeKpi, setActiveKpi,
+  ds,
+  month,
+  detected,
+  activeKpi,
+  setActiveKpi,
 }: {
   ds: Dataset;
   month: string | null;
@@ -1106,19 +1109,19 @@ const QueuesSection = React.memo(function QueuesSection({
 
   const [activeQueue, setActiveQueue] = useState<string>("");
 
-  const queue = queues.find((q) => q.queue === activeQueue)?.queue ?? queues[0]?.queue ?? "";
-
   useEffect(() => {
-    console.log("queues changed", queues.map((q) => q.queue));
-    console.log("activeQueue before sync", activeQueue);
-    console.log("safe KPI", safe, "month", month);
-  }, [queues, activeQueue, safe, month]);
-
-  useEffect(() => {
-    if (!queues.some((q) => q.queue === activeQueue)) {
-      setActiveQueue(queues[0]?.queue ?? "");
+    if (queues.length === 0) {
+      setActiveQueue("");
+      return;
     }
-  }, [queues, activeQueue]);
+
+    setActiveQueue((current) => {
+      if (queues.some((q) => q.queue === current)) return current;
+      return queues[0].queue;
+    });
+  }, [queues]);
+
+  const queue = activeQueue;
 
   const weekly = useMemo(() => {
     if (!queue) return [];
@@ -1132,10 +1135,13 @@ const QueuesSection = React.memo(function QueuesSection({
   const amber = amberBound(meta);
 
   const dotColor = (rag: string) =>
-    rag === "green" ? "var(--success)"
-    : rag === "amber" ? "var(--warning)"
-    : rag === "red" ? "var(--danger)"
-    : "var(--muted-foreground)";
+    rag === "green"
+      ? "var(--success)"
+      : rag === "amber"
+        ? "var(--warning)"
+        : rag === "red"
+          ? "var(--danger)"
+          : "var(--muted-foreground)";
 
   const values = weeklyData.map((d) => d.rate).filter((v) => Number.isFinite(v));
   const minY = values.length ? Math.floor(Math.min(...values, meta.target) - 1.5) : "auto";
@@ -1144,19 +1150,31 @@ const QueuesSection = React.memo(function QueuesSection({
   return (
     <>
       <div className="flex flex-wrap items-center gap-3">
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">KPI</span>
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          KPI
+        </span>
+
         <Select value={safe} onValueChange={(v) => setActiveKpi(v as KpiCode)}>
-          <SelectTrigger className="h-9 w-72 rounded-full glass"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-9 w-72 rounded-full glass">
+            <SelectValue />
+          </SelectTrigger>
           <SelectContent>
             {detected.map((c) => (
-              <SelectItem key={c} value={c}>{c} — {KPI_META[c].what}</SelectItem>
+              <SelectItem key={c} value={c}>
+                {c} — {KPI_META[c].what}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
 
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Queue</span>
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Queue
+        </span>
+
         <Select value={queue} onValueChange={setActiveQueue}>
-          <SelectTrigger className="h-9 w-64 rounded-full glass"><SelectValue placeholder="Select queue" /></SelectTrigger>
+          <SelectTrigger className="h-9 w-64 rounded-full glass">
+            <SelectValue placeholder="Select queue" />
+          </SelectTrigger>
           <SelectContent>
             {queues.map((q) => (
               <SelectItem key={q.queue} value={q.queue}>
@@ -1166,7 +1184,9 @@ const QueuesSection = React.memo(function QueuesSection({
           </SelectContent>
         </Select>
 
-        <Badge variant="secondary" className="ml-auto">{queues.length} queues</Badge>
+        <Badge variant="secondary" className="ml-auto">
+          {queues.length} queues
+        </Badge>
       </div>
 
       <Panel
@@ -1181,28 +1201,49 @@ const QueuesSection = React.memo(function QueuesSection({
           <>
             <ChartFrame height={260}>
               {(width) => (
-                <LineChart width={width} height={260} data={weeklyData} margin={{ top: 26, right: 28, left: 4, bottom: 6 }}>
+                <LineChart
+                  width={width}
+                  height={260}
+                  data={weeklyData}
+                  margin={{ top: 26, right: 28, left: 4, bottom: 6 }}
+                >
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                  />
                   <YAxis
                     tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                     tickFormatter={(v) => `${Math.round(v)}%`}
                     domain={[minY as number | "auto", maxY as number | "auto"]}
                   />
-                  <Tooltip content={<RichTip meta={meta} />} cursor={{ stroke: "var(--border)", strokeDasharray: "3 3" }} />
+                  <Tooltip
+                    content={<RichTip meta={meta} />}
+                    cursor={{ stroke: "var(--border)", strokeDasharray: "3 3" }}
+                  />
                   <ReferenceLine
                     y={meta.target}
                     stroke="var(--success)"
                     strokeDasharray="5 4"
                     ifOverflow="extendDomain"
-                    label={{ value: `target ${meta.targetLabel}`, fontSize: 10, fill: "var(--success)", position: "insideTopRight" }}
+                    label={{
+                      value: `target ${meta.targetLabel}`,
+                      fontSize: 10,
+                      fill: "var(--success)",
+                      position: "insideTopRight",
+                    }}
                   />
                   <ReferenceLine
                     y={amber}
                     stroke="var(--warning)"
                     strokeDasharray="2 4"
                     ifOverflow="extendDomain"
-                    label={{ value: meta.isKM ? "watch ceiling" : "watch floor", fontSize: 10, fill: "var(--warning)", position: "insideBottomRight" }}
+                    label={{
+                      value: meta.isKM ? "watch ceiling" : "watch floor",
+                      fontSize: 10,
+                      fill: "var(--warning)",
+                      position: "insideBottomRight",
+                    }}
                   />
                   <Line
                     type="monotone"
@@ -1212,7 +1253,17 @@ const QueuesSection = React.memo(function QueuesSection({
                     isAnimationActive={false}
                     dot={(props: any) => {
                       const { cx, cy, payload, index } = props;
-                      return <circle key={index} cx={cx} cy={cy} r={5} fill={dotColor(payload.rag)} stroke={meta.color} strokeWidth={1.5} />;
+                      return (
+                        <circle
+                          key={index}
+                          cx={cx}
+                          cy={cy}
+                          r={5}
+                          fill={dotColor(payload.rag)}
+                          stroke={meta.color}
+                          strokeWidth={1.5}
+                        />
+                      );
                     }}
                     activeDot={{ r: 7 }}
                   >
@@ -1220,8 +1271,14 @@ const QueuesSection = React.memo(function QueuesSection({
                       dataKey="rate"
                       position="top"
                       offset={10}
-                      formatter={(v: number) => (Number.isFinite(v) ? `${v.toFixed(1)}%` : "")}
-                      style={{ fontSize: 11, fontWeight: 600, fill: "var(--foreground)" }}
+                      formatter={(v: number) =>
+                        Number.isFinite(v) ? `${v.toFixed(1)}%` : ""
+                      }
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        fill: "var(--foreground)",
+                      }}
                     />
                   </Line>
                 </LineChart>
@@ -1233,7 +1290,10 @@ const QueuesSection = React.memo(function QueuesSection({
         )}
       </Panel>
 
-      <Panel title="All queues for this KPI" subtitle="Ranked by ticket volume — click a row to drill in">
+      <Panel
+        title="All queues for this KPI"
+        subtitle="Ranked by ticket volume — click a row to drill in"
+      >
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -1245,6 +1305,7 @@ const QueuesSection = React.memo(function QueuesSection({
                 <TableHead className="text-right">Status</TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
               {queues.map((q) => (
                 <TableRow
@@ -1253,16 +1314,23 @@ const QueuesSection = React.memo(function QueuesSection({
                   onClick={() => setActiveQueue(q.queue)}
                 >
                   <TableCell className="font-medium">{q.queue}</TableCell>
-                  <TableCell className="text-right tabular-nums">{q.total.toLocaleString()}</TableCell>
-                  <TableCell className="text-right tabular-nums">{q.breaches.toLocaleString()}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {q.total.toLocaleString()}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {q.breaches.toLocaleString()}
+                  </TableCell>
                   <TableCell
                     className="text-right font-semibold tabular-nums"
                     style={{
                       color:
-                        q.rag === "green" ? "var(--success)"
-                        : q.rag === "amber" ? "var(--warning)"
-                        : q.rag === "red" ? "var(--danger)"
-                        : undefined,
+                        q.rag === "green"
+                          ? "var(--success)"
+                          : q.rag === "amber"
+                            ? "var(--warning)"
+                            : q.rag === "red"
+                              ? "var(--danger)"
+                              : undefined,
                     }}
                   >
                     {q.display}
@@ -1272,9 +1340,13 @@ const QueuesSection = React.memo(function QueuesSection({
                   </TableCell>
                 </TableRow>
               ))}
+
               {queues.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell
+                    colSpan={5}
+                    className="py-10 text-center text-sm text-muted-foreground"
+                  >
                     No queues for this filter.
                   </TableCell>
                 </TableRow>
@@ -1286,6 +1358,7 @@ const QueuesSection = React.memo(function QueuesSection({
     </>
   );
 });
+
 /* ─────────────────────────────────────────────────── EXCLUSION IMPACT */
 
 function ExclusionSection({ ds, month, detected }: { ds: Dataset; month: string | null; detected: KpiCode[] }) {
