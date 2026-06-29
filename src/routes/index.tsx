@@ -25,7 +25,7 @@ import {
   rawOverallByKpi, weekLabel, weeklySummary, weeklyQueueSummary,
 } from "@/lib/analyzer/compute";
 import { DeferredMount } from "@/components/DeferredMount";
-import { PCMS_CATEGORIES, pcmsTopAgents, pcmsWeeklyCounts } from "@/lib/analyzer/pcmsAnalytics";
+import { pcmsTopAgents, pcmsWeeklyCounts } from "@/lib/analyzer/pcmsAnalytics";
 import type { ValidationReport, ValidationIssue, SheetMapping } from "@/lib/analyzer/validate";
 import type { WorkerInput, WorkerOutput } from "@/lib/analyzer/worker";
 import { PerfPanel } from "@/components/PerfPanel";
@@ -1912,7 +1912,7 @@ const reasonMix = useMemo(() => {
             className="h-8 w-60 rounded-lg border border-border/60 bg-background/60 px-2.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           />
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by category">
-            {PCMS_CATEGORIES.map((c) => (
+  {reasonMix.map((c) => (
               <button
                 key={c.id}
                 onClick={() => setActiveCat((cur) => cur === c.id ? null : c.id)}
@@ -1987,16 +1987,13 @@ function AgentTip({ active, payload }: any) {
         {row.count.toLocaleString()} total · {row.ko.toLocaleString()} KO · {row.nok.toLocaleString()} NOK
       </p>
       <div className="mt-1 space-y-0.5 border-t border-border/60 pt-1">
-        {top.map(([cat, count]) => {
-          const c = PCMS_CATEGORIES.find((x) => x.id === Number(cat));
-          return (
-            <p key={cat} className="flex items-center gap-1.5">
-  <span className="h-2 w-2 rounded-full bg-muted-foreground" />
-  <span className="flex-1 truncate text-muted-foreground">Category {cat}</span>
-  <span className="font-semibold tabular-nums">{count}</span>
-</p>
-          );
-        })}
+        {top.map(([cat, count]) => (
+  <p key={cat} className="flex items-center gap-1.5">
+    <span className="h-2 w-2 rounded-full bg-muted-foreground" />
+    <span className="flex-1 truncate text-muted-foreground">{`Category ${cat}`}</span>
+    <span className="font-semibold tabular-nums">{count}</span>
+  </p>
+))}
       </div>
     </div>
   );
