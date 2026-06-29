@@ -7,6 +7,13 @@ import type { SlaRow, BreachRow, ExclRow, Dataset } from "./parseTypes";
 export type { SlaRow, BreachRow, ExclRow, Dataset } from "./parseTypes";
 export { exclSet, filteredRows, rawRows } from "./parseTypes";
 
+function normText(v: unknown, fallback = ""): string {
+  const s = String(v ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return s || fallback;
+}
+
 function parseDate(v: unknown): Date | null {
   if (v == null || v === "") return null;
   if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
@@ -76,8 +83,14 @@ export function parseSla(wb: XLSX.WorkBook): Partial<Record<KpiCode, SlaRow[]>> 
   ticket,
   month,
   week,
-  queue: String(col("Queue") || col("QUEUE") || col("TEAM") || col("GROUP") || col("DEPARTMENT") || "Unknown"),
-  language: String(col("ISOLANGUAGE", "ISO_LANGUAGE", "LANGUAGE", "LANG") || "unknown"),
+queue: normText(
+  col("Queue", "QUEUE", "TEAM", "GROUP", "DEPARTMENT"),
+  "Unknown",
+),
+language: normText(
+  col("ISOLANGUAGE", "ISO_LANGUAGE", "LANGUAGE", "LANG"),
+  "unknown",
+),
   isBreach,
   isExcluded: exclRaw === "1" || exclRaw.toUpperCase() === "Y",
 });
@@ -111,11 +124,14 @@ export function parseBreach(wb: XLSX.WorkBook): Partial<Record<KpiCode, BreachRo
   ticket: String(col("TICKET", "TICKETID", "TICKET_ID", "ID", "CASEID") || ""),
   week,
   month,
-  queue: String(col("Queue") || col("QUEUE") || col("TEAM") || col("GROUP") || col("DEPARTMENT") || "Unknown"),
-  agent: String(col("AGENT", "AGENTNAME", "AGENT_NAME", "OWNER") || ""),
-  reason: String(col("REASON", "BREACH_REASON", "BREACHREASON") || ""),
-  aos: String(col("AOS", "SLA_TYPE", "SLATYPE", "TYPE") || ""),
-  comment: String(col("COMMENT", "COMMENTS", "NOTE", "NOTES") || ""),
+ queue: normText(
+  col("Queue", "QUEUE", "TEAM", "GROUP", "DEPARTMENT"),
+  "Unknown",
+),
+agent: normText(col("AGENT", "AGENTNAME", "AGENT_NAME", "OWNER")),
+reason: normText(col("REASON", "BREACH_REASON", "BREACHREASON")),
+aos: normText(col("AOS", "SLA_TYPE", "SLATYPE", "TYPE")),
+comment: normText(col("COMMENT", "COMMENTS", "NOTE", "NOTES")),
 });
     });
     out[code] = acc;
