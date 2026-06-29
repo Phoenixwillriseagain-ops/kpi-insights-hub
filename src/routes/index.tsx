@@ -1184,11 +1184,10 @@ const QueuesSection = React.memo(function QueuesSection({
         </Badge>
       </div>
 
-      <Panel
+            <Panel
         title={`${safe} · ${queue || "—"} · weekly trend`}
         subtitle={meta.what}
         badge={meta.targetLabel}
-        }
       >
         {weeklyData.length === 0 ? (
           <Empty message="No weekly data for this queue." />
