@@ -156,30 +156,58 @@ export function buildDataset(
   exclWbs: XLSX.WorkBook[],
 ): Dataset {
   const ds: Dataset = { sla: {}, breach: {}, excl: {}, pcms: [], months: [], weeks: [] };
-  const mergeInto = <T,>(dst: Partial<Record<KpiCode, T[]>>, src: Partial<Record<KpiCode, T[]>>) => {
+
+  const mergeInto = <T,>(
+    dst: Partial<Record<KpiCode, T[]>>,
+    src: Partial<Record<KpiCode, T[]>>
+  ) => {
     for (const code of Object.keys(src) as KpiCode[]) {
       dst[code] = [...(dst[code] ?? []), ...(src[code] ?? [])];
     }
   };
+
   slaWbs.forEach((wb) => mergeInto(ds.sla, parseSla(wb)));
+  pcmsWbs.forEach((wb) => mergeInto(ds.breach, parseBreach(wb)));
   exclWbs.forEach((wb) => mergeInto(ds.excl, parseExcl(wb)));
 
-  const months = new Set<string>(), weeks = new Set<string>();
+  const months = new Set<string>();
+  const weeks = new Set<string>();
+
   KPI_ORDER.forEach((code) => {
-    (ds.sla[code] ?? []).filter((r) => !r.isExcluded).forEach((r) => {
+    (ds.sla[code] ?? [])
+      .filter((r) => !r.isExcluded)
+      .forEach((r) => {
+        if (r.month && r.month !== "unknown") months.add(r.month);
+        if (r.week && r.week !== "No week") weeks.add(r.week);
+      });
+
+    (ds.breach[code] ?? []).forEach((r) => {
       if (r.month && r.month !== "unknown") months.add(r.month);
       if (r.week && r.week !== "No week") weeks.add(r.week);
     });
   });
+
   ds.months = [...months].sort();
   ds.weeks = [...weeks].sort();
 
-  // Infer dominant year from SLA dataset so PCms week/month strings can align.
   const yearCounts: Record<string, number> = {};
-  ds.months.forEach((m) => { const y = m.slice(0, 4); yearCounts[y] = (yearCounts[y] ?? 0) + 1; });
+  ds.months.forEach((m) => {
+    const y = m.slice(0, 4);
+    yearCounts[y] = (yearCounts[y] ?? 0) + 1;
+  });
+
   const inferYear = Object.entries(yearCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
   const year = inferYear ? parseInt(inferYear, 10) : null;
-  pcmsWbs.forEach((wb) => { ds.pcms.push(...parsePcms(wb, year)); });
 
+  pcmsWbs.forEach((wb) => {
+    ds.pcms.push(...parsePcms(wb, year));
+  });
+console.log("buildDataset result", {
+  sla: Object.keys(ds.sla).length,
+  breach: Object.keys(ds.breach).map((k) => [k, ds.breach[k as KpiCode]?.length ?? 0]),
+  pcms: ds.pcms.length,
+  months: ds.months.length,
+  weeks: ds.weeks.length,
+});
   return ds;
 }
