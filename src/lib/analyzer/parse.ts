@@ -76,7 +76,7 @@ export function parseSla(wb: XLSX.WorkBook): Partial<Record<KpiCode, SlaRow[]>> 
         ticket,
         month,
         week,
-        queue: String(col("QUEUE", "TEAM", "GROUP", "DEPARTMENT") || "Unknown"),
+        queue: String(col("Queue") || col("QUEUE") || col("TEAM") || col("GROUP") || col("DEPARTMENT") || "Unknown")
         language: String(col("ISOLANGUAGE", "ISO_LANGUAGE", "LANGUAGE", "LANG") || "unknown"),
         isBreach,
         isExcluded: exclRaw === "1" || exclRaw.toUpperCase() === "Y",
@@ -111,7 +111,7 @@ export function parseBreach(wb: XLSX.WorkBook): Partial<Record<KpiCode, BreachRo
         ticket: String(col("TICKET", "TICKETID", "TICKET_ID", "ID", "CASEID") || ""),
         week,
         month,
-        queue: String(col("QUEUE", "TEAM", "GROUP", "DEPARTMENT") || "Unknown"),
+        queue: String(col("Queue") || col("QUEUE") || col("TEAM") || col("GROUP") || col("DEPARTMENT") || "Unknown")
         agent: String(col("AGENT", "AGENTNAME", "AGENT_NAME", "OWNER") || ""),
         reason: String(col("REASON", "BREACH_REASON", "BREACHREASON") || ""),
         aos: String(col("AOS", "SLA_TYPE", "SLATYPE", "TYPE") || ""),
