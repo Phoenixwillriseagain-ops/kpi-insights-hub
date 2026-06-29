@@ -1082,17 +1082,12 @@ function WeeklyTable({ rows, isKM }: { rows: WeeklyTableRow[]; isKM: boolean }) 
 /* ─────────────────────────────────────────────────── QUEUES */
 
 const QueuesSection = React.memo(function QueuesSection({
-  ds,
-  month,
-  detected,
-  activeKpi,
-  setActiveKpi,
+  ds, month, detected, activeKpi,
 }: {
   ds: Dataset;
   month: string | null;
   detected: KpiCode[];
   activeKpi: KpiCode;
-  setActiveKpi: (k: KpiCode) => void;
 }) {
   const safe = detected.includes(activeKpi) ? activeKpi : (detected[0] ?? "KSL-2c");
   const meta = KPI_META[safe];
@@ -1144,34 +1139,34 @@ const queue = activeQueue === "__none__" ? "" : activeQueue;
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-3">
+                       <div className="flex flex-wrap items-center gap-3">
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           KPI
         </span>
 
-        <Select value={activeQueue} onValueChange={setActiveQueue}>
-  <SelectTrigger className="h-9 w-64 rounded-full glass">
-    <SelectValue placeholder="Select queue" />
-  </SelectTrigger>
-  <SelectContent>
-    <SelectItem value="__none__">Select queue</SelectItem>
-    {queues.map((q) => (
-      <SelectItem key={q.queue} value={q.queue}>
-        {q.queue} · {q.total} tickets
-      </SelectItem>
-    ))}
-  </SelectContent>
-</Select>
+        <Select value={safe} onValueChange={(v) => setActiveKpi(v as KpiCode)}>
+          <SelectTrigger className="h-9 w-56 rounded-full glass">
+            <SelectValue placeholder="Select KPI" />
+          </SelectTrigger>
+          <SelectContent>
+            {detected.map((code) => (
+              <SelectItem key={code} value={code}>
+                {code}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Queue
         </span>
 
-        <Select value={queue || undefined} onValueChange={setActiveQueue}>
+        <Select value={activeQueue} onValueChange={setActiveQueue}>
           <SelectTrigger className="h-9 w-64 rounded-full glass">
             <SelectValue placeholder="Select queue" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="__none__">Select queue</SelectItem>
             {queues.map((q) => (
               <SelectItem key={q.queue} value={q.queue}>
                 {q.queue} · {q.total} tickets
