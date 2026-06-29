@@ -14,6 +14,8 @@ export const PCMS_CATEGORIES: { id: number; label: string; color: string }[] = [
   { id: 11, label: "Other errors",               color: "#7b2cbf" },
 ];
 
+export const PCMSCATEGORIES = PCMS_CATEGORIES;
+
 export type PcmsRow = {
   ticket: string;
   weekNum: number | null;
