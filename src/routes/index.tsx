@@ -1719,39 +1719,58 @@ const QualityReopenSection = React.memo(function QualityReopenSection({ ds, mont
 /* ─────────────────────────────────────────────────── KSL-5b DETAIL (PCms) */
 
 
-const Ksl5bDetail = React.memo(function Ksl5bDetail({ ds, month }: { ds: Dataset; month: string | null }) {
+const Ksl5bDetail = React.memo(function Ksl5bDetail({
+  ds,
+  month,
+}: {
+  ds: Dataset;
+  month: string | null;
+}) {
   const scopedByMonth = useMemo(() => {
-    if (!month) return ds.pcms;
-    return ds.pcms.filter((r) => r.monthKey === month);
+    const base = !month ? ds.pcms : ds.pcms.filter((r) => r.monthKey === month);
+    return base.slice(0, 4000);
   }, [ds.pcms, month]);
 
   const availableWeeks = useMemo(() => {
     const s = new Set<string>();
-    scopedByMonth.forEach((r) => { if (r.weekKey) s.add(r.weekKey); });
+    scopedByMonth.forEach((r) => {
+      if (r.weekKey) s.add(r.weekKey);
+    });
     return [...s].sort();
   }, [scopedByMonth]);
 
   const [activeWeek, setActiveWeek] = useState<string>("all");
+  const [activeCat, setActiveCat] = useState<number | null>(null);
+  const [activeAgent, setActiveAgent] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+
   const scoped = useMemo(() => {
     if (activeWeek === "all") return scopedByMonth;
     return scopedByMonth.filter((r) => r.weekKey === activeWeek);
   }, [scopedByMonth, activeWeek]);
 
-  const [activeCat, setActiveCat] = useState<number | null>(null);
-  const [activeAgent, setActiveAgent] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  const searchLower = search.trim().toLowerCase();
 
   const filtered = useMemo(() => {
-    return scoped.filter((r) =>
-      (activeCat == null || r.category === activeCat)
-      && (activeAgent == null || r.agent === activeAgent)
-      && (!search.trim() || r.ticket.toLowerCase().includes(search.toLowerCase()) || r.reason.toLowerCase().includes(search.toLowerCase())),
-    );
-  }, [scoped, activeCat, activeAgent, search]);
+    return scoped.filter((r) => {
+      if (activeCat !== null && r.category !== activeCat) return false;
+      if (activeAgent !== null && r.agent !== activeAgent) return false;
+      if (!searchLower) return true;
+      return (
+        r.ticket.toLowerCase().includes(searchLower) ||
+        r.reason.toLowerCase().includes(searchLower) ||
+        r.agent.toLowerCase().includes(searchLower)
+      );
+    });
+  }, [scoped, activeCat, activeAgent, searchLower]);
+
+  const visibleRows = useMemo(() => filtered.slice(0, 200), [filtered]);
 
   const reasonMix = useMemo(() => {
     const map = new Map<number, { id: number; label: string; color: string; ko: number; nok: number; total: number }>();
-    PCMS_CATEGORIES.forEach((c) => map.set(c.id, { id: c.id, label: `${c.id}. ${c.label}`, color: c.color, ko: 0, nok: 0, total: 0 }));
+    PCMSCATEGORIES.forEach((c) =>
+      map.set(c.id, { id: c.id, label: `${c.id}. ${c.label}`, color: c.color, ko: 0, nok: 0, total: 0 })
+    );
     filtered.forEach((r) => {
       const m = map.get(r.category);
       if (!m) return;
@@ -1765,12 +1784,21 @@ const Ksl5bDetail = React.memo(function Ksl5bDetail({ ds, month }: { ds: Dataset
   const agents = useMemo(() => pcmsTopAgents(filtered, 10), [filtered]);
   const weekly = useMemo(() => pcmsWeeklyCounts(scopedByMonth), [scopedByMonth]);
   const ksl5bWeekly = useMemo(
-    () => weeklySummary(ds, "KSL-5b", { lastN: 12 }).map((p) => ({ ...p, label: weekLabel(p.label), weekKey: p.label })),
-    [ds],
+    () =>
+      weeklySummary(ds, "KSL-5b", { lastN: 12 }).map((p) => ({
+        ...p,
+        label: weekLabel(p.label),
+        weekKey: p.label,
+      })),
+    [ds]
   );
+
   const overlay = useMemo(() => {
     const koMap = new Map(weekly.map((w) => [w.weekKey, w.count]));
-    return ksl5bWeekly.map((w) => ({ ...w, koCount: koMap.get(w.weekKey) ?? 0 }));
+    return ksl5bWeekly.map((w) => ({
+      ...w,
+      koCount: koMap.get(w.weekKey) ?? 0,
+    }));
   }, [ksl5bWeekly, weekly]);
 
   const ksl5bMeta = KPI_META["KSL-5b"];
