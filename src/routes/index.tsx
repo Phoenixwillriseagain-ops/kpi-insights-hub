@@ -1768,7 +1768,7 @@ const Ksl5bDetail = React.memo(function Ksl5bDetail({
 
   const reasonMix = useMemo(() => {
     const map = new Map<number, { id: number; label: string; color: string; ko: number; nok: number; total: number }>();
-    PCMSCATEGORIES.forEach((c) =>
+    PCMS_CATEGORIES.forEach((c) =>
       map.set(c.id, { id: c.id, label: `${c.id}. ${c.label}`, color: c.color, ko: 0, nok: 0, total: 0 })
     );
     filtered.forEach((r) => {
