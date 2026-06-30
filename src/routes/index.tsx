@@ -21,8 +21,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { KPI_META, KPI_ORDER, ragLabel, type KpiCode } from "@/lib/analyzer/kpi";
 import type { Dataset } from "@/lib/analyzer/parseTypes";
 import {
-  exclusionImpact, monthLabel, monthlySummary, overallByKpi, queuesBreakdown,
-  rawOverallByKpi, weekLabel, weeklySummary, weeklyqueuessSummary,
+  exclusionImpact, monthLabel, monthlySummary, overallByKpi, queueBreakdown,
+  rawOverallByKpi, weekLabel, weeklySummary, weeklyqueueSummary,
 } from "@/lib/analyzer/compute";
 import { DeferredMount } from "@/components/DeferredMount";
 import { PCMS_CATEGORIES, pcmsTopAgents, pcmsWeeklyCounts } from "@/lib/analyzer/pcmsAnalytics";
@@ -681,7 +681,7 @@ return (
           <TabTrigger value="overview" icon={BarChart3}>Overview</TabTrigger>
           <TabTrigger value="monthly" icon={LineChartIcon}>Monthly Trend</TabTrigger>
           <TabTrigger value="weekly" icon={Activity}>Weekly Trend</TabTrigger>
-          <TabTrigger value="" icon={Layers}>queues Analysis</TabTrigger>
+          <TabTrigger value="" icon={Layers}>queue Analysis</TabTrigger>
           <TabTrigger value="excl" icon={Filter}>Exclusion Impact</TabTrigger>
           <TabTrigger value="quality" icon={CheckCircle2}>KSL-4 &amp; KM-1</TabTrigger>
           {ds.pcms.length > 0 && <TabTrigger value="ksl5b" icon={Users}>KSL-5b Detail</TabTrigger>}
