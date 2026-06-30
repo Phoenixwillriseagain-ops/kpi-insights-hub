@@ -1817,7 +1817,7 @@ const QualityReopenSection = React.memo(function QualityReopenSection({ ds, mont
   );
 });
 
-/* ─────────────────────────────────────────────────── KSL-5b DETAIL (PCms) */
+\* ─────────────────────────────────────────────────── KSL-5b DETAIL (PCms) */
 
 
 const Ksl5bDetail = React.memo(function Ksl5bDetail({
@@ -2075,7 +2075,6 @@ const reasonMix = useMemo(() => {
     </>
   );
 });
-
 
 function AgentTip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
