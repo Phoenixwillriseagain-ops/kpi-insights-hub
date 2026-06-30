@@ -21,7 +21,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { KPI_META, KPI_ORDER, ragLabel, type KpiCode } from "@/lib/analyzer/kpi";
 import type { Dataset } from "@/lib/analyzer/parseTypes";
 import {
-  exclusionImpact, monthLabel, monthlySummary, overallByKpi, QueueBreakdown,
+  exclusionImpact, monthLabel, monthlySummary, overallByKpi, queueBreakdown,
   rawOverallByKpi, weekLabel, weeklySummary, weeklyQueueSummary,
 } from "@/lib/analyzer/compute";
 import { DeferredMount } from "@/components/DeferredMount";
@@ -1131,7 +1131,7 @@ const queuesSection = React.memo(function queuessSection({
 
   const weekly = useMemo(() => {
     if (!queues) return [];
-    return weeklyqueuesSummary(ds, safe, queues, { lastN: 6 }).map((p) => ({
+    return weeklyQueueSummary(ds, safe, queues, { lastN: 6 }).map((p) => ({
       ...p,
       label: weekLabel(p.label),
     }));
