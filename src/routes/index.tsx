@@ -681,7 +681,7 @@ return (
           <TabTrigger value="overview" icon={BarChart3}>Overview</TabTrigger>
           <TabTrigger value="monthly" icon={LineChartIcon}>Monthly Trend</TabTrigger>
           <TabTrigger value="weekly" icon={Activity}>Weekly Trend</TabTrigger>
-          <TabTrigger value="" icon={Layers}>Queue Analysis</TabTrigger>
+          <TabTrigger value="queue" icon={Layers}>Queue Analysis</TabTrigger>
           <TabTrigger value="excl" icon={Filter}>Exclusion Impact</TabTrigger>
           <TabTrigger value="quality" icon={CheckCircle2}>KSL-4 &amp; KM-1</TabTrigger>
           {ds.pcms.length > 0 && <TabTrigger value="ksl5b" icon={Users}>KSL-5b Detail</TabTrigger>}
@@ -696,8 +696,8 @@ return (
 <TabsContent value="weekly" className="space-y-6">
   {activeTab === "weekly" && <WeeklySection ds={ds} detected={detectedKpis} />}
 </TabsContent>
-<TabsContent value="queues" className="space-y-6">
-  {activeTab === "queues" && <QueuesSection ds={ds} month={month} detected={detectedKpis} activeKpi={activeKpi} setActiveKpi={setActiveKpi} />}
+<TabsContent value="queue" className="space-y-6">
+  {activeTab === "queue" && <QueueSection ds={ds} month={month} detected={detectedKpis} activeKpi={activeKpi} setActiveKpi={setActiveKpi} />}
 </TabsContent>
 <TabsContent value="excl" className="space-y-6">
   {activeTab === "excl" && <ExclusionSection ds={ds} month={month} detected={detectedKpis} />}
@@ -1087,7 +1087,7 @@ function WeeklyTable({ rows, isKM }: { rows: WeeklyTableRow[]; isKM: boolean }) 
 }
 /* ─────────────────────────────────────────────────── QUEUES */
 
-const QueuesSection = React.memo(function QueuesSection({
+const queueSection = React.memo(function QueuesSection({
   ds, month, detected, activeKpi, setActiveKpi,
 }: {
   ds: Dataset;
