@@ -1108,17 +1108,24 @@ const QueuesSection = React.memo(function QueuesSection({
     [ds, safe, month],
   );
 
+  // Stable key: comma-joined queue names — only changes when queue list actually changes
+  const queuesKey = useMemo(
+    () => queues.map((q) => q.queue).join(","),
+    [queues],
+  );
+
   const [activeQueue, setActiveQueue] = useState<string>("__none__");
 
-  const prevQueuesRef = useRef<typeof queues | null>(null);
-  if (prevQueuesRef.current !== queues) {
-    prevQueuesRef.current = queues;
+  useEffect(() => {
     if (queues.length === 0) {
-      if (activeQueue !== "__none__") setActiveQueue("__none__");
-    } else if (activeQueue === "__none__" || !queues.some((q) => q.queue === activeQueue)) {
-      setActiveQueue(queues[0].queue);
+      setActiveQueue("__none__");
+      return;
     }
-  }
+    setActiveQueue((current) => {
+      if (current !== "__none__" && queues.some((q) => q.queue === current)) return current;
+      return queues[0].queue;
+    });
+  }, [queuesKey]); // ← stable string, not the array reference
 
   const queue = activeQueue === "__none__" ? "" : activeQueue;
 
@@ -1133,7 +1140,7 @@ const QueuesSection = React.memo(function QueuesSection({
   const weeklyData = useMemo(() => withDeltas(weekly), [weekly]);
 
   const amber = amberBound(meta);
-  
+    
   const dotColor = (rag: string) =>
     rag === "green"
       ? "var(--success)"
