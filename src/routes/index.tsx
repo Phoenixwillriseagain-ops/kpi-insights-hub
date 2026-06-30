@@ -26,7 +26,6 @@ import {
 } from "@/lib/analyzer/compute";
 import { DeferredMount } from "@/components/DeferredMount";
 import { PCMS_CATEGORIES, pcmsTopAgents, pcmsWeeklyCounts } from "@/lib/analyzer/pcmsAnalytics";
-import { pcmsTopAgents, pcmsWeeklyCounts } from "@/lib/analyzer/pcmsAnalytics";
 import type { ValidationReport, ValidationIssue, SheetMapping } from "@/lib/analyzer/validate";
 import type { WorkerInput, WorkerOutput } from "@/lib/analyzer/worker";
 import { PerfPanel } from "@/components/PerfPanel";
@@ -1913,19 +1912,19 @@ const reasonMix = useMemo(() => {
             className="h-8 w-60 rounded-lg border border-border/60 bg-background/60 px-2.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           />
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by category">
-            {PCMS_CATEGORIES.map((c) => (
-  {reasonMix.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => setActiveCat((cur) => cur === c.id ? null : c.id)}
-                className={cn(
-                  "rounded-full border px-2 py-0.5 text-[10px] font-medium transition",
-                  activeCat === c.id ? "border-transparent text-white" : "border-border/70 bg-card/60 text-muted-foreground hover:text-foreground",
-                )}
-                style={activeCat === c.id ? { background: c.color } : undefined}
-              >
-                {c.id}. {c.label}
-              </button>
+            {reasonMix.map((c) => (
+  <button
+    key={c.id}
+    onClick={() => setActiveCat((cur) => cur === c.id ? null : c.id)}
+    className={cn(
+      "rounded-full border px-2 py-0.5 text-[10px] font-medium transition",
+      activeCat === c.id ? "border-transparent text-white" : "border-border/70 bg-card/60 text-muted-foreground hover:text-foreground",
+    )}
+    style={activeCat === c.id ? { background: c.color } : undefined}
+  >
+    {c.id}. {c.label}
+  </button>
+))}
             ))}
           </div>
         </div>
@@ -1981,32 +1980,16 @@ const reasonMix = useMemo(() => {
 function AgentTip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload as ReturnType<typeof pcmsTopAgents>[number];
-  const top = Object.entries(row.byCat).sort((a, b) => Number(b[1]) - Number(a[1])).slice(0, 4);
+  const top = Object.entries(row?.cats ?? {}).sort((a, b) => b[1] - a[1]);
   return (
-    <div className="glass min-w-[200px] rounded-xl border border-border/60 px-3 py-2 text-xs shadow-md">
-      <p className="font-semibold">{row.agent}</p>
-      <p className="tabular-nums text-muted-foreground">
-        {row.count.toLocaleString()} total · {row.ko.toLocaleString()} KO · {row.nok.toLocaleString()} NOK
-      </p>
-      <div className="mt-1 space-y-0.5 border-t border-border/60 pt-1">
-        {top.map(([cat, count]) => {
-          const c = PCMS_CATEGORIES.find((x) => x.id === Number(cat));
-          return (
-            <p key={cat} className="flex items-center gap-1.5">
-  <span className="h-2 w-2 rounded-full bg-muted-foreground" />
-  <span className="flex-1 truncate text-muted-foreground">Category {cat}</span>
-  <span className="font-semibold tabular-nums">{count}</span>
-</p>
-          );
-        })}
-        {top.map(([cat, count]) => (
-  <p key={cat} className="flex items-center gap-1.5">
-    <span className="h-2 w-2 rounded-full bg-muted-foreground" />
-    <span className="flex-1 truncate text-muted-foreground">{`Category ${cat}`}</span>
-    <span className="font-semibold tabular-nums">{count}</span>
-  </p>
-))}
-      </div>
+    <div className="glass rounded-xl border border-border/60 px-3 py-2.5 text-xs shadow-lg">
+      <p className="mb-1.5 font-semibold">{row?.agent}</p>
+      {top.map(([cat, count]) => (          // ← keep only THIS one
+        <div key={cat} className="flex items-center justify-between gap-4">
+          <span className="text-muted-foreground">{cat}</span>
+          <span className="font-semibold tabular-nums">{count}</span>
+        </div>
+      ))}
     </div>
   );
 }
