@@ -21,8 +21,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { KPI_META, KPI_ORDER, ragLabel, type KpiCode } from "@/lib/analyzer/kpi";
 import type { Dataset } from "@/lib/analyzer/parseTypes";
 import {
-  exclusionImpact, monthLabel, monthlySummary, overallByKpi, queueBreakdown,
-  rawOverallByKpi, weekLabel, weeklySummary, weeklyqueueSummary,
+  exclusionImpact, monthLabel, monthlySummary, overallByKpi, QueueBreakdown,
+  rawOverallByKpi, weekLabel, weeklySummary, weeklyQueueSummary,
 } from "@/lib/analyzer/compute";
 import { DeferredMount } from "@/components/DeferredMount";
 import { PCMS_CATEGORIES, pcmsTopAgents, pcmsWeeklyCounts } from "@/lib/analyzer/pcmsAnalytics";
@@ -1104,7 +1104,7 @@ const queuesSection = React.memo(function queuessSection({
   const meta = KPI_META[safe];
 
   const queuess = useMemo(
-    () => queuesBreakdown(ds, safe, month),
+    () => QueueBreakdown(ds, safe, month),
     [ds, safe, month],
   );
 
@@ -1614,7 +1614,7 @@ const QualityReopenSection = React.memo(function QualityReopenSection({ ds, mont
         const meta = KPI_META[code];
         const monthly = withDeltas(monthlySummary(ds, code).map((p) => ({ ...p, label: monthLabel(p.label) })));
         const weekly = withDeltas(weeklySummary(ds, code, { lastN: 6 }).map((p) => ({ ...p, label: weekLabel(p.label) })));
-        const queuess = queuesBreakdown(ds, code, month);
+        const queuess = QueueBreakdown(ds, code, month);
         const amber = amberBound(meta);
         const dotColor = (rag: string) =>
           rag === "green" ? "var(--success)" : rag === "amber" ? "var(--warning)" : rag === "red" ? "var(--danger)" : "var(--muted-foreground)";
