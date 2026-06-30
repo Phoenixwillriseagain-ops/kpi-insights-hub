@@ -37,8 +37,8 @@ export const Route = createFileRoute("/")(
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Pulse \u00b7 KPI & Breaches Analyzer" },
-      { name: "description", content: "Modern interactive dashboard for SLA breaches: monthly trends, weekly heat, queue drill-down and exclusion crosscheck \u2014 all in your browser." },
+      { title: "Pulse · KPI & Breaches Analyzer" },
+      { name: "description", content: "Modern interactive dashboard for SLA breaches: monthly trends, weekly heat, queue drill-down and exclusion crosscheck — all in your browser." },
     ],
   }),
   component: Dashboard,
@@ -109,7 +109,7 @@ function Dashboard() {
           })),
         );
 
-      const [sla, breach, excl] = await perfMeasure("read files \u2192 ArrayBuffer", async () =>
+      const [sla, breach, excl] = await perfMeasure("read files → ArrayBuffer", async () =>
         Promise.all([toBufs(files.sla), toBufs(files.breach), toBufs(files.excl)]),
       );
 
@@ -151,7 +151,7 @@ function Dashboard() {
         try {
           return await new Promise<WorkerOutput>((resolve, reject) => {
             const timer = setTimeout(
-              () => reject(new Error("Analysis timed out after 60 s \u2014 try a smaller file or reload.")),
+              () => reject(new Error("Analysis timed out after 60 s — try a smaller file or reload.")),
               TIMEOUT_MS,
             );
 
@@ -1487,13 +1487,6 @@ function CategoryBreakdownList({ counts }: { counts: Array<{ category: string; c
   return (
     <div className="space-y-1">
       {counts.map(({ category: cat, count }) => (
-  <p key={cat} className="flex items-center gap-1.5">
-    <span className="h-2 w-2 rounded-full bg-muted-foreground" />
-    <span className="flex-1 truncate text-muted-foreground">{`Category ${cat}`}</span>
-    <span className="font-semibold tabular-nums">{count}</span>
-  </p>
-))}
-      </div>
-    </div>
-  );
-}
+        <p key={cat} className="flex items-center gap-1.5">
+          <span className="h-2 w-2 rounded-full bg-muted-foreground" />
+          <span className="f
