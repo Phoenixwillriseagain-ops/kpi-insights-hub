@@ -21,8 +21,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { KPI_META, KPI_ORDER, ragLabel, type KpiCode } from "@/lib/analyzer/kpi";
 import type { Dataset } from "@/lib/analyzer/parseTypes";
 import {
-  exclusionImpact, monthLabel, monthlySummary, overallByKpi, queueBreakdown,
-  rawOverallByKpi, weekLabel, weeklySummary, weeklyQueueSummary,
+  exclusionImpact, monthLabel, monthlySummary, overallByKpi, queuesBreakdown,
+  rawOverallByKpi, weekLabel, weeklySummary, weeklyqueuessSummary,
 } from "@/lib/analyzer/compute";
 import { DeferredMount } from "@/components/DeferredMount";
 import { PCMS_CATEGORIES, pcmsTopAgents, pcmsWeeklyCounts } from "@/lib/analyzer/pcmsAnalytics";
@@ -38,7 +38,7 @@ export const Route = createFileRoute("/")(
   head: () => ({
     meta: [
       { title: "Pulse · KPI & Breaches Analyzer" },
-      { name: "description", content: "Modern interactive dashboard for SLA breaches: monthly trends, weekly heat, queue drill-down and exclusion crosscheck — all in your browser." },
+      { name: "description", content: "Modern interactive dashboard for SLA breaches: monthly trends, weekly heat, queuess drill-down and exclusion crosscheck — all in your browser." },
     ],
   }),
   component: Dashboard,
@@ -341,7 +341,7 @@ function UploadHero({
         </h1>
         <p className="mx-auto mt-4 max-w-2xl text-sm text-muted-foreground sm:text-base">
           Drop the SLA overall workbook, an optional PCms KSL-5b deep-dive and an exclusions register.
-          Get KPI compliance, monthly &amp; weekly trends, queue drill-down, exclusion crosscheck
+          Get KPI compliance, monthly &amp; weekly trends, queues drill-down, exclusion crosscheck
           and a dedicated KSL-5b reason analysis — instantly.
         </p>
       </section>
@@ -382,7 +382,7 @@ function UploadHero({
 
       <div className="mt-12 grid grid-cols-1 gap-3 text-xs text-muted-foreground sm:grid-cols-3">
         <Tip icon={Target} label="13 KPIs" body="KSL-1 through KM-2 with the right targets baked in." />
-        <Tip icon={TrendingUp} label="Trends" body="Monthly and last-6-weeks views per KPI and per queue." />
+        <Tip icon={TrendingUp} label="Trends" body="Monthly and last-6-weeks views per KPI and per queues." />
         <Tip icon={Pin} label="Exclusions" body="Crosscheck before/after exclusion impact at a glance." />
       </div>
     </main>
@@ -681,7 +681,7 @@ return (
           <TabTrigger value="overview" icon={BarChart3}>Overview</TabTrigger>
           <TabTrigger value="monthly" icon={LineChartIcon}>Monthly Trend</TabTrigger>
           <TabTrigger value="weekly" icon={Activity}>Weekly Trend</TabTrigger>
-          <TabTrigger value="queue" icon={Layers}>Queue Analysis</TabTrigger>
+          <TabTrigger value="" icon={Layers}>queues Analysis</TabTrigger>
           <TabTrigger value="excl" icon={Filter}>Exclusion Impact</TabTrigger>
           <TabTrigger value="quality" icon={CheckCircle2}>KSL-4 &amp; KM-1</TabTrigger>
           {ds.pcms.length > 0 && <TabTrigger value="ksl5b" icon={Users}>KSL-5b Detail</TabTrigger>}
@@ -696,8 +696,8 @@ return (
 <TabsContent value="weekly" className="space-y-6">
   {activeTab === "weekly" && <WeeklySection ds={ds} detected={detectedKpis} />}
 </TabsContent>
-<TabsContent value="queue" className="space-y-6">
-  {activeTab === "queue" && <QueueSection ds={ds} month={month} detected={detectedKpis} activeKpi={activeKpi} setActiveKpi={setActiveKpi} />}
+<TabsContent value="queues" className="space-y-6">
+  {activeTab === "queues" && <queuesSection ds={ds} month={month} detected={detectedKpis} activeKpi={activeKpi} setActiveKpi={setActiveKpi} />}
 </TabsContent>
 <TabsContent value="excl" className="space-y-6">
   {activeTab === "excl" && <ExclusionSection ds={ds} month={month} detected={detectedKpis} />}
@@ -1085,9 +1085,9 @@ function WeeklyTable({ rows, isKM }: { rows: WeeklyTableRow[]; isKM: boolean }) 
     </div>
   );
 }
-/* ─────────────────────────────────────────────────── QUEUES */
+/* ─────────────────────────────────────────────────── queuesS */
 
-const queueSection = React.memo(function QueuesSection({
+const queuesSection = React.memo(function queuessSection({
   ds, month, detected, activeKpi, setActiveKpi,
 }: {
   ds: Dataset;
@@ -1103,39 +1103,39 @@ const queueSection = React.memo(function QueuesSection({
 
   const meta = KPI_META[safe];
 
-  const queues = useMemo(
-    () => queueBreakdown(ds, safe, month),
+  const queuess = useMemo(
+    () => queuesBreakdown(ds, safe, month),
     [ds, safe, month],
   );
 
-  // Stable key: comma-joined queue names — only changes when queue list actually changes
-  const queuesKey = useMemo(
-    () => queues.map((q) => q.queue).join(","),
-    [queues],
+  // Stable key: comma-joined queues names — only changes when queues list actually changes
+  const queuessKey = useMemo(
+    () => queuess.map((q) => q.queues).join(","),
+    [queuess],
   );
 
-  const [activeQueue, setActiveQueue] = useState<string>("__none__");
+  const [activequeues, setActivequeues] = useState<string>("__none__");
 
   useEffect(() => {
-    if (queues.length === 0) {
-      setActiveQueue("__none__");
+    if (queuess.length === 0) {
+      setActivequeues("__none__");
       return;
     }
-    setActiveQueue((current) => {
-      if (current !== "__none__" && queues.some((q) => q.queue === current)) return current;
-      return queues[0].queue;
+    setActivequeues((current) => {
+      if (current !== "__none__" && queuess.some((q) => q.queues === current)) return current;
+      return queuess[0].queues;
     });
-  }, [queuesKey]); // ← stable string, not the array reference
+  }, [queuessKey]); // ← stable string, not the array reference
 
-  const queue = activeQueue === "__none__" ? "" : activeQueue;
+  const queues = activequeues === "__none__" ? "" : activequeues;
 
   const weekly = useMemo(() => {
-    if (!queue) return [];
-    return weeklyQueueSummary(ds, safe, queue, { lastN: 6 }).map((p) => ({
+    if (!queues) return [];
+    return weeklyqueuesSummary(ds, safe, queues, { lastN: 6 }).map((p) => ({
       ...p,
       label: weekLabel(p.label),
     }));
-  }, [ds, safe, queue]);
+  }, [ds, safe, queues]);
 
   const weeklyData = useMemo(() => withDeltas(weekly), [weekly]);
 
@@ -1155,15 +1155,15 @@ const queueSection = React.memo(function QueuesSection({
   const maxY = values.length ? Math.ceil(Math.max(...values, meta.target) + 1.5) : "auto";
 
  useEffect(() => {
-  console.log("queue diagnostics", {
+  console.log("queues diagnostics", {
     safe,
     month,
-    queueCount: queues.length,
-    selectedQueue: queue,
-    firstQueue: queues[0],
+    queuesCount: queuess.length,
+    selectedqueues: queues,
+    firstqueues: queuess[0],
     weeklyCount: weeklyData.length,
   });
-}, [safe, month, queues, queue]);
+}, [safe, month, queuess, queues]);
 
   return (
     <>
@@ -1186,35 +1186,35 @@ const queueSection = React.memo(function QueuesSection({
   </Select>
 
   <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-    Queue
+    queues
   </span>
 
-  <Select value={activeQueue} onValueChange={setActiveQueue}>
+  <Select value={activequeues} onValueChange={setActivequeues}>
     <SelectTrigger className="h-9 w-64 rounded-full glass">
-      <SelectValue placeholder="Select queue" />
+      <SelectValue placeholder="Select queues" />
     </SelectTrigger>
     <SelectContent>
-      <SelectItem value="__none__">Select queue</SelectItem>
-      {queues.map((q) => (
-        <SelectItem key={q.queue} value={q.queue}>
-          {q.queue} · {q.total} tickets
+      <SelectItem value="__none__">Select queues</SelectItem>
+      {queuess.map((q) => (
+        <SelectItem key={q.queues} value={q.queues}>
+          {q.queues} · {q.total} tickets
         </SelectItem>
       ))}
     </SelectContent>
   </Select>
 
   <Badge variant="secondary" className="ml-auto">
-    {queues.length} queues
+    {queuess.length} queuess
   </Badge>
 </div>
 
     <Panel
-  title={`${safe} · ${queue || "—"} · weekly trend`}
+  title={`${safe} · ${queues || "—"} · weekly trend`}
   subtitle={meta.what}
   badge={meta.targetLabel}
 >
         {weeklyData.length === 0 ? (
-          <Empty message="No weekly data for this queue." />
+          <Empty message="No weekly data for this queues." />
         ) : (
           <>
             <ChartFrame height={260}>
@@ -1302,14 +1302,14 @@ const queueSection = React.memo(function QueuesSection({
       </Panel>
 
       <Panel
-        title="All queues for this KPI"
+        title="All queuess for this KPI"
         subtitle="Ranked by ticket volume — click a row to drill in"
       >
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Queue</TableHead>
+                <TableHead>queues</TableHead>
                 <TableHead className="text-right">Tickets</TableHead>
                 <TableHead className="text-right">Breaches</TableHead>
                 <TableHead className="text-right">Rate</TableHead>
@@ -1317,13 +1317,13 @@ const queueSection = React.memo(function QueuesSection({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {queues.map((q) => (
+              {queuess.map((q) => (
                 <TableRow
-                  key={q.queue}
-                  className={cn("cursor-pointer", q.queue === queue && "bg-primary/5")}
-                  onClick={() => setActiveQueue(q.queue)}
+                  key={q.queues}
+                  className={cn("cursor-pointer", q.queues === queues && "bg-primary/5")}
+                  onClick={() => setActivequeues(q.queues)}
                 >
-                  <TableCell className="font-medium">{q.queue}</TableCell>
+                  <TableCell className="font-medium">{q.queues}</TableCell>
                   <TableCell className="text-right tabular-nums">{q.total.toLocaleString()}</TableCell>
                   <TableCell className="text-right tabular-nums">{q.breaches.toLocaleString()}</TableCell>
                   <TableCell
@@ -1346,10 +1346,10 @@ const queueSection = React.memo(function QueuesSection({
                   </TableCell>
                 </TableRow>
               ))}
-              {queues.length === 0 && (
+              {queuess.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
-                    No queues for this filter.
+                    No queuess for this filter.
                   </TableCell>
                 </TableRow>
               )}
@@ -1614,7 +1614,7 @@ const QualityReopenSection = React.memo(function QualityReopenSection({ ds, mont
         const meta = KPI_META[code];
         const monthly = withDeltas(monthlySummary(ds, code).map((p) => ({ ...p, label: monthLabel(p.label) })));
         const weekly = withDeltas(weeklySummary(ds, code, { lastN: 6 }).map((p) => ({ ...p, label: weekLabel(p.label) })));
-        const queues = queueBreakdown(ds, code, month);
+        const queuess = queuesBreakdown(ds, code, month);
         const amber = amberBound(meta);
         const dotColor = (rag: string) =>
           rag === "green" ? "var(--success)" : rag === "amber" ? "var(--warning)" : rag === "red" ? "var(--danger)" : "var(--muted-foreground)";
@@ -1688,12 +1688,12 @@ const QualityReopenSection = React.memo(function QualityReopenSection({ ds, mont
               </Panel>
             </div>
 
-            <Panel title={`${code} · queue breakdown`} subtitle="Ranked by ticket volume in the active period" >
+            <Panel title={`${code} · queues breakdown`} subtitle="Ranked by ticket volume in the active period" >
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Queue</TableHead>
+                      <TableHead>queues</TableHead>
                       <TableHead className="text-right">Tickets</TableHead>
                       <TableHead className="text-right">Breaches</TableHead>
                       <TableHead className="text-right">Rate</TableHead>
@@ -1701,9 +1701,9 @@ const QualityReopenSection = React.memo(function QualityReopenSection({ ds, mont
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {queues.map((q) => (
-                      <TableRow key={q.queue}>
-                        <TableCell className="font-medium">{q.queue}</TableCell>
+                    {queuess.map((q) => (
+                      <TableRow key={q.queues}>
+                        <TableCell className="font-medium">{q.queues}</TableCell>
                         <TableCell className="text-right tabular-nums">{q.total.toLocaleString()}</TableCell>
                         <TableCell className="text-right tabular-nums">{q.breaches.toLocaleString()}</TableCell>
                         <TableCell className="text-right font-semibold tabular-nums" style={{ color: q.rag === "green" ? "var(--success)" : q.rag === "amber" ? "var(--warning)" : q.rag === "red" ? "var(--danger)" : undefined }}>
@@ -1712,8 +1712,8 @@ const QualityReopenSection = React.memo(function QualityReopenSection({ ds, mont
                         <TableCell className="text-right"><RagBadge rag={q.rag} isKM={meta.isKM} /></TableCell>
                       </TableRow>
                     ))}
-                    {queues.length === 0 && (
-                      <TableRow><TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">No queues for this filter.</TableCell></TableRow>
+                    {queuess.length === 0 && (
+                      <TableRow><TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">No queuess for this filter.</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
