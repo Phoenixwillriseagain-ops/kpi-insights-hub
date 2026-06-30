@@ -964,7 +964,7 @@ const MonthlySection = React.memo(function MonthlySection({ ds, detected }: { ds
   );
 });
 
-/* \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 WEEKLY */
+/* ____ WEEKLY */
 
 const WeeklySection = React.memo(function WeeklySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) {
   return (
@@ -1004,7 +1004,7 @@ const WeeklySection = React.memo(function WeeklySection({ ds, detected }: { ds: 
   );
 });
 
-/* \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 QUEUES */
+/* ________QUEUES */
 
 const QueuesSection = React.memo(function QueuesSection({
   ds, month, detected, activeKpi, setActiveKpi,
@@ -1015,26 +1015,52 @@ const QueuesSection = React.memo(function QueuesSection({
   activeKpi: KpiCode;
   setActiveKpi: (k: KpiCode) => void;
 }) {
-  const safeKpi: KpiCode = detected.includes(activeKpi) ? activeKpi : (detected[0] ?? "KSL-2c");
-  const meta = KPI_META[safeKpi];
-  const rows = useMemo(() => queueBreakdown(ds, safeKpi, month), [ds, safeKpi, month]);
-  const weekRows = useMemo(() => weeklyQueueSummary(ds, safeKpi), [ds, safeKpi]);
+const safeKpi: KpiCode = detected.includes(activeKpi) ? activeKpi : (detected[0] ?? "KSL-2c");
+const meta = KPI_META[safeKpi];
 
-  const topQueues = useMemo(() => {
-    const sorted = [...rows].sort((a, b) => b.breaches - a.breaches);
-    return sorted.slice(0, 5).map((r) => r.queue);
-  }, [rows]);
+// 1️⃣ rows first — no dependencies on the others
+const rows = useMemo(() => queueBreakdown(ds, safeKpi, month), [ds, safeKpi, month]);
 
-  const chartData = useMemo(() => {
-    return weekRows.map((w) => {
-      const entry: Record<string, unknown> = { label: weekLabel(w.week) };
-      topQueues.forEach((q) => {
-        const found = w.queues.find((x) => x.queue === q);
-        entry[q] = found?.rate ?? null;
-      });
-      return entry;
+// 2️⃣ topQueues second — depends on rows
+const topQueues = useMemo(() => {
+  const sorted = [...rows].sort((a, b) => b.breaches - a.breaches);
+  return sorted.slice(0, 5).map((r) => r.queue);
+}, [rows]);
+
+// 3️⃣ weekRows third — depends on topQueues (must come AFTER)
+const weekRows = useMemo(() => {
+  const allWeeks = new Set<string>();
+  const queueData: Record<string, Record<string, number>> = {};
+
+  topQueues.forEach((q) => {
+    const pts = weeklyQueueSummary(ds, safeKpi, q, { lastN: 12 });
+    queueData[q] = {};
+    pts.forEach((p) => {
+      allWeeks.add(p.label);
+      queueData[q][p.label] = p.rate;
     });
-  }, [weekRows, topQueues]);
+  });
+
+  return [...allWeeks].sort().map((week) => ({
+    week,
+    queues: topQueues.map((q) => ({
+      queue: q,
+      rate: queueData[q][week] ?? null,
+    })),
+  }));
+}, [ds, safeKpi, topQueues]);
+
+// 4️⃣ chartData last — depends on weekRows + topQueues
+const chartData = useMemo(() => {
+  return weekRows.map((w) => {
+    const entry: Record<string, unknown> = { label: weekLabel(w.week) };
+    topQueues.forEach((q) => {
+      const found = w.queues.find((x) => x.queue === q);
+      entry[q] = found?.rate ?? null;
+    });
+    return entry;
+  });
+}, [weekRows, topQueues]);
 
   const QUEUE_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
 
@@ -1125,7 +1151,7 @@ const QueuesSection = React.memo(function QueuesSection({
   );
 });
 
-/* \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 EXCLUSION */
+/* \_________________________________EXCLUSION */
 
 const ExclusionSection = React.memo(function ExclusionSection({ ds, month, detected }: { ds: Dataset; month: string | null; detected: KpiCode[] }) {
   return (
