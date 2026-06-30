@@ -1018,16 +1018,16 @@ const QueuesSection = React.memo(function QueuesSection({
 const safeKpi: KpiCode = detected.includes(activeKpi) ? activeKpi : (detected[0] ?? "KSL-2c");
 const meta = KPI_META[safeKpi];
 
-// 1️⃣ rows first — no dependencies on the others
+// 1\ufe0f\u20e3 rows first \u2014 no dependencies on the others
 const rows = useMemo(() => queueBreakdown(ds, safeKpi, month), [ds, safeKpi, month]);
 
-// 2️⃣ topQueues second — depends on rows
+// 2\ufe0f\u20e3 topQueues second \u2014 depends on rows
 const topQueues = useMemo(() => {
   const sorted = [...rows].sort((a, b) => b.breaches - a.breaches);
   return sorted.slice(0, 5).map((r) => r.queue);
 }, [rows]);
 
-// 3️⃣ weekRows third — depends on topQueues (must come AFTER)
+// 3\ufe0f\u20e3 weekRows third \u2014 depends on topQueues (must come AFTER)
 const weekRows = useMemo(() => {
   const allWeeks = new Set<string>();
   const queueData: Record<string, Record<string, number>> = {};
@@ -1050,7 +1050,7 @@ const weekRows = useMemo(() => {
   }));
 }, [ds, safeKpi, topQueues]);
 
-// 4️⃣ chartData last — depends on weekRows + topQueues
+// 4\ufe0f\u20e3 chartData last \u2014 depends on weekRows + topQueues
 const chartData = useMemo(() => {
   return weekRows.map((w) => {
     const entry: Record<string, unknown> = { label: weekLabel(w.week) };
@@ -1513,6 +1513,12 @@ function CategoryBreakdownList({ counts }: { counts: Array<{ category: string; c
   return (
     <div className="space-y-1">
       {counts.map(({ category: cat, count }) => (
-        <p key={cat} className="flex items-center gap-1.5">
+        <p key={cat} className="flex items-center gap-1.5 text-xs">
           <span className="h-2 w-2 rounded-full bg-muted-foreground" />
-          <span className="f
+          <span className="font-medium">{cat}</span>
+          <span className="ml-auto tabular-nums text-muted-foreground">{count.toLocaleString()}</span>
+        </p>
+      ))}
+    </div>
+  );
+}
