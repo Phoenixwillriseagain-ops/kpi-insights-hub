@@ -47,9 +47,9 @@ function makeCol(row: Record<string, unknown>) {
   const keys = Object.keys(row);
   return (...names: string[]) => {
     for (const n of names) {
-      const target = n.replace(/[\s_-]/g, "").toLowerCase();
+      const target = n.replace(/[\s_\-]/g, "").toLowerCase();
       for (const k of keys) {
-        if (k.replace(/[\s_-]/g, "").toLowerCase() === target) return row[k];
+        if (k.replace(/[\s_\-]/g, "").toLowerCase() === target) return row[k];
       }
     }
     return "";
@@ -67,6 +67,12 @@ export function parseSla(wb: XLSX.WorkBook): Partial<Record<KpiCode, SlaRow[]>> 
     const code = matchKpi(sheetName);
     if (!code) continue;
     const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[sheetName], { defval: "" });
+
+    // Log actual column headers on the first row so queue mapping can be debugged
+    if (rows.length > 0) {
+      console.log(`[parseSla] sheet="${sheetName}" (${code}) columns:`, Object.keys(rows[0]));
+    }
+
     const acc: SlaRow[] = out[code] ?? [];
     rows.forEach((r, ri) => {
       const col = makeCol(r);
@@ -79,21 +85,40 @@ export function parseSla(wb: XLSX.WorkBook): Partial<Record<KpiCode, SlaRow[]>> 
       const isBreach = breachVal === 1 || String(breachVal).trim() === "1" || String(breachVal).toUpperCase() === "Y" ||
                        String(breachVal).toUpperCase() === "YES" || (!!breachTime && breachTime !== "0");
       const exclRaw = String(col("EXCLUDED", "IS_EXCLUDED", "EXCLUDE") || "").trim();
+
+      const queue = normText(
+        col(
+          // original aliases
+          "Queue", "QUEUE",
+          // org/team structures
+          "TEAM", "TEAMNAME", "TEAM_NAME",
+          "GROUP", "GROUPNAME", "GROUP_NAME",
+          "DEPARTMENT", "DEPT",
+          // ITSM / ServiceNow / Jira style
+          "ASSIGNMENTGROUP", "ASSIGNMENT_GROUP",
+          "SERVICETEAM", "SERVICE_TEAM",
+          "SUPPORTGROUP", "SUPPORT_GROUP",
+          "WORKGROUP", "WORK_GROUP",
+          "RESOLVER", "RESOLVERGROUP", "RESOLVER_GROUP",
+          "CATEGORY", "SUBCATEGORY",
+          "BUSINESSUNIT", "BUSINESS_UNIT",
+          "QUEUENAME", "QUEUE_NAME",
+        ),
+        "Unknown",
+      );
+
       acc.push({
-  ticket,
-  month,
-  week,
-queue: normText(
-  col("Queue", "QUEUE", "TEAM", "GROUP", "DEPARTMENT"),
-  "Unknown",
-),
-language: normText(
-  col("ISOLANGUAGE", "ISO_LANGUAGE", "LANGUAGE", "LANG"),
-  "unknown",
-),
-  isBreach,
-  isExcluded: exclRaw === "1" || exclRaw.toUpperCase() === "Y",
-});
+        ticket,
+        month,
+        week,
+        queue,
+        language: normText(
+          col("ISOLANGUAGE", "ISO_LANGUAGE", "LANGUAGE", "LANG"),
+          "unknown",
+        ),
+        isBreach,
+        isExcluded: exclRaw === "1" || exclRaw.toUpperCase() === "Y",
+      });
     });
     out[code] = acc;
   }
@@ -121,18 +146,29 @@ export function parseBreach(wb: XLSX.WorkBook): Partial<Record<KpiCode, BreachRo
       const monV = String(col("MONTH", "PERIOD", "YEARMONTH") || "");
       const month = /^\d{4}-\d{2}$/.test(monV) ? monV : (week !== "No week" ? week.slice(0, 7) : "unknown");
       acc.push({
-  ticket: String(col("TICKET", "TICKETID", "TICKET_ID", "ID", "CASEID") || ""),
-  week,
-  month,
- queue: normText(
-  col("Queue", "QUEUE", "TEAM", "GROUP", "DEPARTMENT"),
-  "Unknown",
-),
-agent: normText(col("AGENT", "AGENTNAME", "AGENT_NAME", "OWNER")),
-reason: normText(col("REASON", "BREACH_REASON", "BREACHREASON")),
-aos: normText(col("AOS", "SLA_TYPE", "SLATYPE", "TYPE")),
-comment: normText(col("COMMENT", "COMMENTS", "NOTE", "NOTES")),
-});
+        ticket: String(col("TICKET", "TICKETID", "TICKET_ID", "ID", "CASEID") || ""),
+        week,
+        month,
+        queue: normText(
+          col(
+            "Queue", "QUEUE",
+            "TEAM", "TEAMNAME", "TEAM_NAME",
+            "GROUP", "GROUPNAME", "GROUP_NAME",
+            "DEPARTMENT", "DEPT",
+            "ASSIGNMENTGROUP", "ASSIGNMENT_GROUP",
+            "SERVICETEAM", "SERVICE_TEAM",
+            "SUPPORTGROUP", "SUPPORT_GROUP",
+            "WORKGROUP", "WORK_GROUP",
+            "RESOLVERGROUP", "RESOLVER_GROUP",
+            "QUEUENAME", "QUEUE_NAME",
+          ),
+          "Unknown",
+        ),
+        agent: normText(col("AGENT", "AGENTNAME", "AGENT_NAME", "OWNER")),
+        reason: normText(col("REASON", "BREACH_REASON", "BREACHREASON")),
+        aos: normText(col("AOS", "SLA_TYPE", "SLATYPE", "TYPE")),
+        comment: normText(col("COMMENT", "COMMENTS", "NOTE", "NOTES")),
+      });
     });
     out[code] = acc;
   }
@@ -218,12 +254,23 @@ export function buildDataset(
   pcmsWbs.forEach((wb) => {
     ds.pcms.push(...parsePcms(wb, year));
   });
-console.log("buildDataset result", {
-  sla: Object.keys(ds.sla).length,
-  breach: Object.keys(ds.breach).map((k) => [k, ds.breach[k as KpiCode]?.length ?? 0]),
-  pcms: ds.pcms.length,
-  months: ds.months.length,
-  weeks: ds.weeks.length,
-});
+
+  console.log("buildDataset result", {
+    sla: Object.keys(ds.sla).length,
+    breach: Object.keys(ds.breach).map((k) => [k, ds.breach[k as KpiCode]?.length ?? 0]),
+    pcms: ds.pcms.length,
+    months: ds.months.length,
+    weeks: ds.weeks.length,
+  });
+
+  // Log queue distribution per KPI to verify column mapping worked
+  KPI_ORDER.forEach((code) => {
+    const rows = ds.sla[code];
+    if (!rows?.length) return;
+    const queues = new Map<string, number>();
+    rows.forEach((r) => queues.set(r.queue, (queues.get(r.queue) ?? 0) + 1));
+    console.log(`[buildDataset] ${code} queue distribution:`, Object.fromEntries([...queues.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)));
+  });
+
   return ds;
 }
