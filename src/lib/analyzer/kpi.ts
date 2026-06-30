@@ -25,7 +25,7 @@ export const KPI_META: Record<KpiCode, KpiMeta> = {
   "KSL-2d": { code:"KSL-2d", what:"Handling Time Medium ≤180min",         isKM:false, isRating:false, target:95, targetLabel:"≥ 95%",        color:"#ee9b00" },
   "KSL-3a": { code:"KSL-3a", what:"Reaction Time Ticket ≤30min",          isKM:false, isRating:false, target:95, targetLabel:"≥ 95%",        color:"#ca6702" },
   "KSL-3b": { code:"KSL-3b", what:"Reaction Time Chat ≤60sec",            isKM:false, isRating:false, target:95, targetLabel:"≥ 95%",        color:"#f4a261" },
-  "KSL-4":  { code:"KSL-4",  what:"Solution Quality w/o Related Incident",isKM:false, isRating:false, target:70, targetLabel:"≥ 70%",        color:"#ae2012" },
+  "KSL-4":  { code:"KSL-4",  what:"Solution Quality w/o Related Incident",isKM:false, isRating:false, target:75, targetLabel:"≥ 75%",        color:"#ae2012" },
   "KSL-5a": { code:"KSL-5a", what:"Process Conformity Automatic",         isKM:false, isRating:false, target:90, targetLabel:"≥ 90%",        color:"#9b2226" },
   "KSL-5b": { code:"KSL-5b", what:"Process Conformity Manual",            isKM:false, isRating:false, target:90, targetLabel:"≥ 90%",        color:"#7b2cbf" },
   "KSL-6":  { code:"KSL-6",  what:"Linking to Compass",                   isKM:false, isRating:false, target:95, targetLabel:"≥ 95%",        color:"#3a86ff" },
