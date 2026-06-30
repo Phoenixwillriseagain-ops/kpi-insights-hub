@@ -43,6 +43,7 @@ function isoWeekStr(date: Date): string {
   return d.getUTCFullYear() + "-W" + (wk < 10 ? "0" : "") + wk;
 }
 
+// Named-header fallback helper (for files that don't match the index layout)
 function makeCol(row: Record<string, unknown>) {
   const keys = Object.keys(row);
   return (...names: string[]) => {
@@ -61,34 +62,70 @@ export async function readWorkbook(file: File): Promise<XLSX.WorkBook> {
   return XLSX.read(buf, { type: "array" });
 }
 
+// Column index layout matching breaches-tracker config.js C_XLSX:
+// 0:Incident Ticket  1:DATE_CLOSE  2:Status  3:Queue  4:Priority
+// 5:ISO_Language  6:Tool  7:TOPIC  8:SLA_Code  9:SLA_N
+// 10:Breach_Description  11:DATE_TIME_Breach
+// 12:COMPASS ID  13:Reason  14:AOS  15:Agent  16:BMS ID
+// 17:Comment  18:AOS Issue  19:Excluded  20:Jira  21:Week  22:Unique
+const COL = {
+  ticket:     0,
+  date_close: 1,
+  status:     2,
+  queue:      3,
+  priority:   4,
+  lang:       5,
+  tool:       6,
+  topic:      7,
+  sla_code:   8,
+  sla_n:      9,
+  breach_desc:10,
+  breach_dt:  11,
+  excluded:   19,
+  week:       21,
+};
+
 export function parseSla(wb: XLSX.WorkBook): Partial<Record<KpiCode, SlaRow[]>> {
   const out: Partial<Record<KpiCode, SlaRow[]>> = {};
   for (const sheetName of wb.SheetNames) {
     const code = matchKpi(sheetName);
     if (!code) continue;
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[sheetName], { defval: "" });
+
+    // Use array mode (header:1) — same as breaches-tracker — for reliable index access
+    const rawRows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sheetName], { header: 1, defval: "" });
+    if (rawRows.length < 2) continue; // skip empty or header-only sheets
+
+    // Detect if row[0] is a header row (string values) to skip it
+    const firstRow = rawRows[0] as unknown[];
+    const hasHeader = typeof firstRow[COL.ticket] === "string" &&
+      firstRow[COL.ticket].toString().toLowerCase().includes("ticket");
+    const dataRows = hasHeader ? rawRows.slice(1) : rawRows;
+
     const acc: SlaRow[] = out[code] ?? [];
-    rows.forEach((r, ri) => {
-      const col = makeCol(r);
-      const d = parseDate(col("DATECLOSE", "DATE_CLOSE", "CLOSEDDATE", "CLOSEDATE", "RESOLVEDDATE", "RESOLUTION_DATE"));
+
+    dataRows.forEach((r: unknown, ri: number) => {
+      const row = r as unknown[];
+      const ticketRaw = String(row[COL.ticket] ?? "").trim();
+      if (!ticketRaw) return; // skip blank rows
+      const ticket = ticketRaw || `__row_${ri}`;
+
+      const d = parseDate(row[COL.date_close]);
       const month = d ? d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") : "unknown";
       const week = d ? isoWeekStr(d) : "No week";
-      const ticket = String(col("TICKET", "TICKETID", "TICKET_ID", "ID", "CASEID", "INCIDENTTICKET") || "").trim() || `__row_${ri}`;
-      const breachVal = col("IS_BREACH", "ISBREACH", "BREACH", "BREACH_FLAG");
-      const breachTime = String(col("DATE_TIME_BREACH", "DATETIMEBREACH", "BREACHTIME") || "").trim();
-      const isBreach = breachVal === 1 || String(breachVal).trim() === "1" || String(breachVal).toUpperCase() === "Y" ||
-                       String(breachVal).toUpperCase() === "YES" || (!!breachTime && breachTime !== "0");
-      const exclRaw = String(col("EXCLUDED", "IS_EXCLUDED", "EXCLUDE") || "").trim();
-      acc.push({
-        ticket,
-        month,
-        week,
-        queue: normText(col("Queue", "QUEUE", "TEAM", "GROUP", "DEPARTMENT"), "Unknown"),
-        language: normText(col("ISOLANGUAGE", "ISO_LANGUAGE", "LANGUAGE", "LANG"), "unknown"),
-        isBreach,
-        isExcluded: exclRaw === "1" || exclRaw.toUpperCase() === "Y",
-      });
+
+      const queue = normText(row[COL.queue], "Unknown");
+      const language = normText(row[COL.lang], "unknown");
+
+      // Breach: check DATE_TIME_Breach (col 11) — non-empty = breach
+      const breachDt = String(row[COL.breach_dt] ?? "").trim();
+      const isBreach = !!breachDt && breachDt !== "0" && breachDt !== "";
+
+      const exclRaw = String(row[COL.excluded] ?? "").trim();
+      const isExcluded = exclRaw === "1" || exclRaw.toUpperCase() === "Y" || exclRaw.toUpperCase() === "YES";
+
+      acc.push({ ticket, month, week, queue, language, isBreach, isExcluded });
     });
+
     out[code] = acc;
   }
   return out;
