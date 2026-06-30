@@ -32,8 +32,7 @@ import { PerfPanel } from "@/components/PerfPanel";
 import { perfMark, perfMeasure } from "@/lib/perf";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/")(\
-  {
+export const Route = createFileRoute("/")({
   ssr: false,
   head: () => ({
     meta: [
@@ -186,7 +185,7 @@ function Dashboard() {
 
       if (!result.report.ok && !override) {
         toast.error("Fix required columns before running", {
-          description: "See the validation panel for details, or toggle "Run anyway" to bypass.",
+          description: "See the validation panel for details, or toggle \u201cRun anyway\u201d to bypass.",
         });
         return;
       }
@@ -202,7 +201,7 @@ function Dashboard() {
 
       if (!Object.keys(ds.sla).length) {
         toast.error("No KPI sheets detected", {
-          description: "Sheet names should match KSL-1, KSL-2a, …, KM-1, KM-2.",
+          description: "Sheet names should match KSL-1, KSL-2a, \u2026, KM-1, KM-2.",
         });
         return;
       }
@@ -309,8 +308,8 @@ function Header({
 /* ────────────────────────────────────────────────────────────── UPLOAD HERO */
 
 const SLOT_META: Record<Slot, { title: string; desc: string; required?: boolean; icon: typeof FileSpreadsheet; accent: string }> = {
-  sla:    { title: "SLA Overall",            desc: "Workbook with one sheet per KPI (KSL-1…KM-2). Source of all KPI rates.", required: true, icon: FileSpreadsheet, accent: "from-[color:var(--chart-1)] to-[color:var(--primary-glow)]" },
-  breach: { title: "KSL-5b Deep-dive (PCms)", desc: "Optional. Per-ticket KO/NOK reason categories — unlocks the KSL-5b Detail tab.", icon: Layers,         accent: "from-[color:var(--chart-3)] to-[color:var(--chart-4)]" },
+  sla:    { title: "SLA Overall",            desc: "Workbook with one sheet per KPI (KSL-1\u2026KM-2). Source of all KPI rates.", required: true, icon: FileSpreadsheet, accent: "from-[color:var(--chart-1)] to-[color:var(--primary-glow)]" },
+  breach: { title: "KSL-5b Deep-dive (PCms)", desc: "Optional. Per-ticket KO/NOK reason categories \u2014 unlocks the KSL-5b Detail tab.", icon: Layers,         accent: "from-[color:var(--chart-3)] to-[color:var(--chart-4)]" },
   excl:   { title: "Exclusions register",    desc: "Optional. Extra ticket IDs to exclude on top of the per-row Excluded flag.", icon: Filter,         accent: "from-[color:var(--chart-2)] to-[color:var(--warning)]" },
 };
 
@@ -370,12 +369,12 @@ function UploadHero({
           className="group h-12 rounded-full bg-[image:var(--gradient-primary)] px-8 text-base font-semibold text-primary-foreground ring-glow transition hover:opacity-95 disabled:opacity-40"
         >
           {busy
-            ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Crunching…</>
+            ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Crunching&hellip;</>
             : <><Activity className="mr-2 h-4 w-4" /> {report ? "Re-run analysis" : "Run analysis"} <ChevronRight className="ml-1 h-4 w-4 transition group-hover:translate-x-0.5" /></>}
         </Button>
         {hasErrors && (
           <p className="text-[11px] text-muted-foreground">
-            Fix the validation errors above or enable "Run anyway" to bypass.
+            Fix the validation errors above or enable &ldquo;Run anyway&rdquo; to bypass.
           </p>
         )}
       </div>
@@ -455,7 +454,7 @@ function IssueRow({ issue }: { issue: ValidationIssue }) {
       <div className="min-w-0 flex-1">
         <p className="truncate">
           <span className="font-semibold text-foreground">{issue.file}</span>
-          {issue.sheet && <span className="text-muted-foreground"> · sheet "{issue.sheet}"</span>}
+          {issue.sheet && <span className="text-muted-foreground"> · sheet &ldquo;{issue.sheet}&rdquo;</span>}
         </p>
         <p style={{ color }}>{issue.message}</p>
         {issue.hint && <p className="text-muted-foreground">{issue.hint}</p>}
@@ -482,7 +481,7 @@ function ExclusionMappingPreview({ mappings }: { mappings: SheetMapping[] }) {
           <div key={i} className="rounded-xl border border-border/40 bg-card/40 p-3">
             <p className="mb-2 text-xs font-semibold">
               <span className="text-foreground">{m.file}</span>
-              <span className="text-muted-foreground"> · sheet "{m.sheet}"</span>
+              <span className="text-muted-foreground"> · sheet &ldquo;{m.sheet}&rdquo;</span>
             </p>
             <div className="overflow-hidden rounded-lg border border-border/40">
               <table className="w-full text-xs">
@@ -601,7 +600,7 @@ function UploadCard({ slot, files, onAdd, onRemove }: {
               "flex items-center gap-2 rounded-lg border border-border/60 bg-background/40 px-2.5 py-1.5 text-xs",
               f.error && "border-destructive/40 bg-destructive/5",
             )}>
-              <span aria-hidden="true" className={cn("font-semibold", f.error ? "text-destructive" : "text-[color:var(--success)]")}>{f.error ? "!" : "✓"}</span>
+              <span aria-hidden="true" className={cn("font-semibold", f.error ? "text-destructive" : "text-[color:var(--success)]")}>{f.error ? "!" : "\u2713"}</span>
               <span className="sr-only">{f.error ? `Error: ${f.error}` : "Loaded"}</span>
               <span className="flex-1 truncate" title={f.name}>{f.name}</span>
               <button
@@ -672,7 +671,7 @@ return (
       <Tabs
         value={activeTab}
         onValueChange={(v) => {
-          perfMark("tab switch", `${activeTab} → ${v}`);
+          perfMark("tab switch", `${activeTab} \u2192 ${v}`);
           setActiveTab(v);
         }}
         className="space-y-6"
@@ -762,8 +761,8 @@ const OverviewSection = React.memo(function OverviewSection({ ds, month, detecte
     <>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatBlock label="Tickets evaluated" value={totals.total.toLocaleString()} icon={FileSpreadsheet} accent="primary" />
-        <StatBlock label="Breaches" value={totals.breaches.toLocaleString()} sub={totals.total ? ((totals.breaches / totals.total) * 100).toFixed(1) + "% of total" : "—"} icon={TrendingUp} accent="danger" />
-        <StatBlock label="Excluded" value={totals.excluded.toLocaleString()} sub={totals.total ? ((totals.excluded / totals.total) * 100).toFixed(1) + "% removed" : "—"} icon={Filter} accent="warning" />
+        <StatBlock label="Breaches" value={totals.breaches.toLocaleString()} sub={totals.total ? ((totals.breaches / totals.total) * 100).toFixed(1) + "% of total" : "\u2014"} icon={TrendingUp} accent="danger" />
+        <StatBlock label="Excluded" value={totals.excluded.toLocaleString()} sub={totals.total ? ((totals.excluded / totals.total) * 100).toFixed(1) + "% removed" : "\u2014"} icon={Filter} accent="warning" />
         <StatBlock label="KPIs on target" value={`${totals.passingKpis} / ${detected.length}`} icon={Target} accent="success" />
       </div>
 
@@ -1054,7 +1053,7 @@ function WeeklyTable({ rows, isKM }: { rows: WeeklyTableRow[]; isKM: boolean }) 
             <TableHead className="h-8 text-right text-[11px]">Tickets</TableHead>
             <TableHead className="h-8 text-right text-[11px]">Breaches</TableHead>
             <TableHead className="h-8 text-right text-[11px]">Rate</TableHead>
-            <TableHead className="h-8 text-right text-[11px]">Δ vs prev</TableHead>
+            <TableHead className="h-8 text-right text-[11px]">\u0394 vs prev</TableHead>
             <TableHead className="h-8 text-right text-[11px]">Status</TableHead>
           </TableRow>
         </TableHeader>
@@ -1072,7 +1071,7 @@ function WeeklyTable({ rows, isKM }: { rows: WeeklyTableRow[]; isKM: boolean }) 
                 <TableCell className="py-1.5 text-right text-xs tabular-nums">{r.breaches.toLocaleString()}</TableCell>
                 <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums" style={{ color: rateColor }}>{r.rate.toFixed(1)}%</TableCell>
                 <TableCell className="py-1.5 text-right text-xs tabular-nums" style={{ color: deltaColor }}>
-                  {r.delta == null ? "—" : `${r.delta > 0 ? "+" : ""}${r.delta.toFixed(1)}pp`}
+                  {r.delta == null ? "\u2014" : `${r.delta > 0 ? "+" : ""}${r.delta.toFixed(1)}pp`}
                 </TableCell>
                 <TableCell className="py-1.5 text-right">
                   <span className="inline-block h-2 w-2 rounded-full align-middle" style={{ background: rateColor ?? "var(--muted-foreground)" }} aria-label={r.rag} />
@@ -1194,7 +1193,7 @@ useEffect(() => {
       </div>
 
       <Panel
-        title={`${safe} · ${effectiveQueue ?? "—"} · weekly trend`}
+        title={`${safe} · ${effectiveQueue ?? "\u2014"} · weekly trend`}
         subtitle={meta.what}
         badge={meta.targetLabel}
       >
@@ -1534,7 +1533,7 @@ function RichTip({ active, payload, label, meta }: any) {
       </p>
       {delta != null && (
         <p className="mt-1 border-t border-border/40 pt-1 tabular-nums text-muted-foreground">
-          Δ {delta >= 0 ? "+" : ""}{delta.toFixed(2)}pp vs prev
+          \u0394 {delta >= 0 ? "+" : ""}{delta.toFixed(2)}pp vs prev
         </p>
       )}
       {row.total != null && (
