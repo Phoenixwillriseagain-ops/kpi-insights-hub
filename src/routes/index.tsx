@@ -6,7 +6,7 @@ import {
   Sparkles, Sun, Target, TrendingUp, Upload, Users, X,
 } from "lucide-react";
 import {
-  Bar, BarChart, CartesianGrid, ComposedChart, LabelList, Legend, Line, LineChart,
+  Bar, BarChart, CartesianGrid, Cell, ComposedChart, LabelList, Legend, Line, LineChart,
   ReferenceLine, Tooltip, XAxis, YAxis,
 } from "recharts";
 
@@ -1018,16 +1018,16 @@ const QueuesSection = React.memo(function QueuesSection({
 const safeKpi: KpiCode = detected.includes(activeKpi) ? activeKpi : (detected[0] ?? "KSL-2c");
 const meta = KPI_META[safeKpi];
 
-// 1\ufe0f\u20e3 rows first \u2014 no dependencies on the others
+// 1️⃣ rows first — no dependencies on the others
 const rows = useMemo(() => queueBreakdown(ds, safeKpi, month), [ds, safeKpi, month]);
 
-// 2\ufe0f\u20e3 topQueues second \u2014 depends on rows
+// 2️⃣ topQueues second — depends on rows
 const topQueues = useMemo(() => {
   const sorted = [...rows].sort((a, b) => b.breaches - a.breaches);
   return sorted.slice(0, 5).map((r) => r.queue);
 }, [rows]);
 
-// 3\ufe0f\u20e3 weekRows third \u2014 depends on topQueues (must come AFTER)
+// 3️⃣ weekRows third — depends on topQueues (must come AFTER)
 const weekRows = useMemo(() => {
   const allWeeks = new Set<string>();
   const queueData: Record<string, Record<string, number>> = {};
@@ -1050,7 +1050,7 @@ const weekRows = useMemo(() => {
   }));
 }, [ds, safeKpi, topQueues]);
 
-// 4\ufe0f\u20e3 chartData last \u2014 depends on weekRows + topQueues
+// 4️⃣ chartData last — depends on weekRows + topQueues
 const chartData = useMemo(() => {
   return weekRows.map((w) => {
     const entry: Record<string, unknown> = { label: weekLabel(w.week) };
@@ -1164,6 +1164,8 @@ const ExclusionSection = React.memo(function ExclusionSection({ ds, month, detec
           { name: "Raw (before)", rate: imp.rawRate, breaches: imp.rawBreaches, total: imp.rawTotal, rag: imp.rawRag },
           { name: "Adjusted (after)", rate: imp.adjustedRate, breaches: imp.adjustedBreaches, total: imp.adjustedTotal, rag: imp.adjustedRag },
         ];
+        const barColor = (rag: string) =>
+          rag === "green" ? "var(--success)" : rag === "amber" ? "var(--warning)" : "var(--danger)";
         return (
           <Panel key={code} title={code} subtitle={meta.what} badge={meta.targetLabel}>
             {imp.rawTotal === 0
@@ -1186,12 +1188,9 @@ const ExclusionSection = React.memo(function ExclusionSection({ ds, month, detec
                       <ReferenceLine y={meta.target} stroke="var(--success)" strokeDasharray="5 4" ifOverflow="extendDomain" />
                       <Bar dataKey="rate" radius={[4, 4, 0, 0]} isAnimationActive={false}>
                         {data.map((entry, index) => (
-                          <rect
-                            key={index}
-                            fill={entry.rag === "green" ? "var(--success)" : entry.rag === "amber" ? "var(--warning)" : "var(--danger)"}
-                          />
+                          <Cell key={index} fill={barColor(entry.rag)} />
                         ))}
-                        <LabelList dataKey="rate" position="top" formatter={(v: number) => `${v.toFixed(1)}%`} style={{ fontSize: 11, fill: "var(--foreground)" }} />
+                        <LabelList dataKey="rate" position="top" formatter={(v: any) => v != null ? `${Number(v).toFixed(1)}%` : ""} style={{ fontSize: 11, fill: "var(--foreground)" }} />
                       </Bar>
                     </BarChart>
                   )}</ChartFrame>
