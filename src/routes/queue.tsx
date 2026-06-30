@@ -1,12 +1,42 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useCallback, useRef, useMemo } from "react";
-import Papa from "papaparse";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 
 export const Route = createFileRoute("/queue")({ component: QueueAnalyzerPage });
+
+/* ── native CSV parser (no external deps) ─────────────────────── */
+function parseCSVText(text: string): { fields: string[]; data: Record<string, string>[] } {
+  const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+  const parseRow = (line: string): string[] => {
+    const cols: string[] = [];
+    let cur = "", inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
+        else inQ = !inQ;
+      } else if (ch === "," && !inQ) { cols.push(cur); cur = ""; }
+      else cur += ch;
+    }
+    cols.push(cur);
+    return cols;
+  };
+  let headerLine = 0;
+  while (headerLine < lines.length && !lines[headerLine].trim()) headerLine++;
+  const fields = parseRow(lines[headerLine]).map(f => f.trim());
+  const data: Record<string, string>[] = [];
+  for (let i = headerLine + 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    const vals = parseRow(lines[i]);
+    const row: Record<string, string> = {};
+    fields.forEach((f, fi) => { row[f] = vals[fi] ?? ""; });
+    data.push(row);
+  }
+  return { fields, data };
+}
 
 /* ── palette (matches app design tokens) ─────────────────────── */
 const COLORS = [
@@ -144,13 +174,11 @@ export default function QueueAnalyzerPage() {
 
   /* ── parse ──────────────────────────────────────────────────── */
   const parseCSV = useCallback((text: string, name: string) => {
-    const result = Papa.parse<RawRow>(text, { header: true, skipEmptyLines: true, dynamicTyping: false });
-    const raw = result.data;
+    const { fields, data: raw } = parseCSVText(text);
     if (!raw.length) return;
-    const headers = result.meta.fields ?? Object.keys(raw[0]);
     const cm: ColMap = {};
-    for (const k of Object.keys(COL_HINTS)) cm[k] = detectCol(headers, k);
-    setColMap(cm); setAllCols(headers.slice(0, 12)); setFileName(name);
+    for (const k of Object.keys(COL_HINTS)) cm[k] = detectCol(fields, k);
+    setColMap(cm); setAllCols(fields.slice(0, 12)); setFileName(name);
     const parsed: ParsedRow[] = raw.map(r => {
       const cd = cm.created ? new Date(r[cm.created] ?? "") : null;
       const ud = cm.updated ? new Date(r[cm.updated] ?? "") : null;
@@ -470,7 +498,7 @@ export default function QueueAnalyzerPage() {
                   className="rounded-md border bg-card px-3 py-1.5 text-sm focus:ring-1 focus:ring-ring"/>
               </div>
               <button onClick={()=>{setFQueue('');setFStatus('');setFAgent('');
-                if(allDates.length){setFFrom(isoDate(allDates[0]));setFTo(isoDate(allDates[allDates.length-1]));}}}
+                if(allDates.length){setFFrom(isoDate(allDates[0]));setFTo(isoDate(allDates[allDates.length-1]));} }}
                 className="rounded-md border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent self-end transition-colors">
                 Clear
               </button>
