@@ -25,6 +25,7 @@ import {
   rawOverallByKpi, weekLabel, weeklySummary, weeklyQueueSummary,
 } from "@/lib/analyzer/compute";
 import { DeferredMount } from "@/components/DeferredMount";
+import { PCMS_CATEGORIES, pcmsTopAgents, pcmsWeeklyCounts } from "@/lib/analyzer/pcmsAnalytics";
 import { pcmsTopAgents, pcmsWeeklyCounts } from "@/lib/analyzer/pcmsAnalytics";
 import type { ValidationReport, ValidationIssue, SheetMapping } from "@/lib/analyzer/validate";
 import type { WorkerInput, WorkerOutput } from "@/lib/analyzer/worker";
@@ -1089,11 +1090,6 @@ function WeeklyTable({ rows, isKM }: { rows: WeeklyTableRow[]; isKM: boolean }) 
 
 const QueuesSection = React.memo(function QueuesSection({
   ds, month, detected, activeKpi, setActiveKpi,
-  ds,
-  month,
-  detected,
-  activeKpi,
-  setActiveKpi,
 }: {
   ds: Dataset;
   month: string | null;
@@ -1108,15 +1104,9 @@ const QueuesSection = React.memo(function QueuesSection({
     () => queueBreakdown(ds, safe, month),
     [ds, safe, month],
   );
-  const meta = KPIMETA[safe];
 
   const [activeQueue, setActiveQueue] = useState<string>("__none__");
-  const queues = useMemo(() => {
-    return queueBreakdown(ds, safe, month);
-  }, [ds, safe, month]);
 
-  const [selectedQueue, setSelectedQueue] = useState<string | null>(null);
-  
 useEffect(() => {
   if (queues.length === 0) {
     setActiveQueue("__none__");
@@ -1125,20 +1115,11 @@ useEffect(() => {
 
   setActiveQueue((current) => {
     if (current !== "__none__" && queues.some((q) => q.queue === current)) return current;
-  setSelectedQueue(null);
-}, [safe, month]);
-  
-  const effectiveQueue = useMemo(() => {
-    if (!queues.length) return null;
-    if (selectedQueue && queues.some((q) => q.queue === selectedQueue)) return selectedQueue;
     return queues[0].queue;
   });
 }, [queues]);
-  }, [queues, selectedQueue]);
 
 const queue = activeQueue === "__none__" ? "" : activeQueue;
-  const weeklyData = useMemo(() => {
-    if (!effectiveQueue) return [];
 
   const weekly = useMemo(() => {
     if (!queue) return [];
@@ -1147,13 +1128,6 @@ const queue = activeQueue === "__none__" ? "" : activeQueue;
       label: weekLabel(p.label),
     }));
   }, [ds, safe, queue]);
-    return withDeltas(
-      weeklyQueueSummary(ds, safe, effectiveQueue, { lastN: 6 }).map((p) => ({
-        ...p,
-        label: weekLabel(p.label),
-      })),
-    );
-  }, [ds, safe, effectiveQueue]);
 
   const weeklyData = withDeltas(weekly);
   const amber = amberBound(meta);
@@ -1170,7 +1144,7 @@ const queue = activeQueue === "__none__" ? "" : activeQueue;
   const values = weeklyData.map((d) => d.rate).filter((v) => Number.isFinite(v));
   const minY = values.length ? Math.floor(Math.min(...values, meta.target) - 1.5) : "auto";
   const maxY = values.length ? Math.ceil(Math.max(...values, meta.target) + 1.5) : "auto";
-  
+
   useEffect(() => {
   console.log("queue diagnostics", {
     safe,
@@ -1181,7 +1155,6 @@ const queue = activeQueue === "__none__" ? "" : activeQueue;
     weeklyCount: weeklyData.length,
   });
 }, [safe, month, queues, queue, weeklyData]);
-  
 
   return (
     <>
@@ -1231,57 +1204,6 @@ const queue = activeQueue === "__none__" ? "" : activeQueue;
   subtitle={meta.what}
   badge={meta.targetLabel}
 >
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          KPI
-        </span>
-
-        <Select value={safe} onValueChange={(v) => setActiveKpi(v as KpiCode)}>
-          <SelectTrigger className="h-9 w-56 rounded-full glass">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {detected.map((code) => (
-              <SelectItem key={code} value={code}>
-                {code} · {KPIMETA[code].what}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Queue
-        </span>
-
-        <Select
-          value={effectiveQueue ?? "__none__"}
-          onValueChange={(v) => setSelectedQueue(v === "__none__" ? null : v)}
-        >
-          <SelectTrigger className="h-9 w-64 rounded-full glass">
-            <SelectValue placeholder="Select queue" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__" disabled>
-              {queues.length ? "Select queue" : "No queues"}
-            </SelectItem>
-            {queues.map((q) => (
-              <SelectItem key={q.queue} value={q.queue}>
-                {q.queue} · {q.total} tickets
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Badge variant="secondary" className="ml-auto">
-          {queues.length} queues
-        </Badge>
-      </div>
-
-      <Panel
-        title={`${safe} · ${effectiveQueue ?? "—"} · weekly trend`}
-        subtitle={meta.what}
-        badge={meta.targetLabel}
-      >
         {weeklyData.length === 0 ? (
           <Empty message="No weekly data for this queue." />
         ) : (
@@ -1296,10 +1218,6 @@ const queue = activeQueue === "__none__" ? "" : activeQueue;
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                   <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-                  />
                   <YAxis
                     tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                     tickFormatter={(v) => `${Math.round(v)}%`}
@@ -1363,11 +1281,6 @@ const queue = activeQueue === "__none__" ? "" : activeQueue;
                         Number.isFinite(v) ? `${v.toFixed(1)}%` : ""
                       }
                       style={{ fontSize: 11, fontWeight: 600, fill: "var(--foreground)" }}
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 600,
-                        fill: "var(--foreground)",
-                      }}
                     />
                   </Line>
                 </LineChart>
@@ -1400,18 +1313,10 @@ const queue = activeQueue === "__none__" ? "" : activeQueue;
                   key={q.queue}
                   className={cn("cursor-pointer", q.queue === queue && "bg-primary/5")}
                   onClick={() => setActiveQueue(q.queue)}
-                  className={cn("cursor-pointer", q.queue === effectiveQueue && "bg-primary/5")}
-                  onClick={() => setSelectedQueue(q.queue)}
                 >
                   <TableCell className="font-medium">{q.queue}</TableCell>
                   <TableCell className="text-right tabular-nums">{q.total.toLocaleString()}</TableCell>
                   <TableCell className="text-right tabular-nums">{q.breaches.toLocaleString()}</TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {q.total.toLocaleString()}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {q.breaches.toLocaleString()}
-                  </TableCell>
                   <TableCell
                     className="text-right font-semibold tabular-nums"
                     style={{
@@ -1432,14 +1337,9 @@ const queue = activeQueue === "__none__" ? "" : activeQueue;
                   </TableCell>
                 </TableRow>
               ))}
-
               {queues.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={5} className="py-10 text-center text-sm text-muted-foreground">
-                  <TableCell
-                    colSpan={5}
-                    className="py-10 text-center text-sm text-muted-foreground"
-                  >
                     No queues for this filter.
                   </TableCell>
                 </TableRow>
@@ -1817,7 +1717,7 @@ const QualityReopenSection = React.memo(function QualityReopenSection({ ds, mont
   );
 });
 
-\* ─────────────────────────────────────────────────── KSL-5b DETAIL (PCms) */
+/* ─────────────────────────────────────────────────── KSL-5b DETAIL (PCms) */
 
 
 const Ksl5bDetail = React.memo(function Ksl5bDetail({
@@ -2013,6 +1913,7 @@ const reasonMix = useMemo(() => {
             className="h-8 w-60 rounded-lg border border-border/60 bg-background/60 px-2.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           />
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by category">
+            {PCMS_CATEGORIES.map((c) => (
   {reasonMix.map((c) => (
               <button
                 key={c.id}
@@ -2076,6 +1977,7 @@ const reasonMix = useMemo(() => {
   );
 });
 
+
 function AgentTip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload as ReturnType<typeof pcmsTopAgents>[number];
@@ -2087,6 +1989,16 @@ function AgentTip({ active, payload }: any) {
         {row.count.toLocaleString()} total · {row.ko.toLocaleString()} KO · {row.nok.toLocaleString()} NOK
       </p>
       <div className="mt-1 space-y-0.5 border-t border-border/60 pt-1">
+        {top.map(([cat, count]) => {
+          const c = PCMS_CATEGORIES.find((x) => x.id === Number(cat));
+          return (
+            <p key={cat} className="flex items-center gap-1.5">
+  <span className="h-2 w-2 rounded-full bg-muted-foreground" />
+  <span className="flex-1 truncate text-muted-foreground">Category {cat}</span>
+  <span className="font-semibold tabular-nums">{count}</span>
+</p>
+          );
+        })}
         {top.map(([cat, count]) => (
   <p key={cat} className="flex items-center gap-1.5">
     <span className="h-2 w-2 rounded-full bg-muted-foreground" />
