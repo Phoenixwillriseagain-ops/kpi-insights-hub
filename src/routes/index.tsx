@@ -36,8 +36,8 @@ export const Route = createFileRoute("/")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Pulse · KPI & Breaches Analyzer" },
-      { name: "description", content: "Modern interactive dashboard for SLA breaches: monthly trends, weekly heat, queue drill-down and exclusion crosscheck — all in your browser." },
+      { title: "Pulse \u00b7 KPI & Breaches Analyzer" },
+      { name: "description", content: "Modern interactive dashboard for SLA breaches: monthly trends, weekly heat, queue drill-down and exclusion crosscheck \u2014 all in your browser." },
     ],
   }),
   component: Dashboard,
@@ -107,7 +107,7 @@ function Dashboard() {
           })),
         );
 
-      const [sla, breach, excl] = await perfMeasure("read files → ArrayBuffer", async () =>
+      const [sla, breach, excl] = await perfMeasure("read files \u2192 ArrayBuffer", async () =>
         Promise.all([toBufs(files.sla), toBufs(files.breach), toBufs(files.excl)]),
       );
 
@@ -149,7 +149,7 @@ function Dashboard() {
         try {
           return await new Promise<WorkerOutput>((resolve, reject) => {
             const timer = setTimeout(
-              () => reject(new Error("Analysis timed out after 60 s — try a smaller file or reload.")),
+              () => reject(new Error("Analysis timed out after 60 s \u2014 try a smaller file or reload.")),
               TIMEOUT_MS,
             );
 
@@ -209,9 +209,9 @@ function Dashboard() {
       setDataset(ds);
       setActiveMonth(null);
 
-      perfMark("dataset ready", `${ds.months.length}mo · ${ds.weeks.length}wk · ${Object.keys(ds.sla).length} KPIs`);
+      perfMark("dataset ready", `${ds.months.length}mo \u00b7 ${ds.weeks.length}wk \u00b7 ${Object.keys(ds.sla).length} KPIs`);
       toast.success("Analysis ready", {
-        description: `${ds.months.length} months · ${ds.weeks.length} weeks · ${Object.keys(ds.sla).length} KPIs`,
+        description: `${ds.months.length} months \u00b7 ${ds.weeks.length} weeks \u00b7 ${Object.keys(ds.sla).length} KPIs`,
       });
     } catch (e) {
       toast.error("Analysis failed", { description: e instanceof Error ? e.message : String(e) });
@@ -262,13 +262,13 @@ function Dashboard() {
       )}
 
       <footer className="border-t border-border/50 mt-16 py-8 text-center text-xs text-muted-foreground">
-        Built client-side · Nothing leaves your browser · Drop new files anytime
+        Built client-side \u00b7 Nothing leaves your browser \u00b7 Drop new files anytime
       </footer>
     </div>
   );
 }
 
-/* ────────────────────────────────────────────────────────────── HEADER */
+/* \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 HEADER */
 
 function Header({
   onToggleTheme,
@@ -305,7 +305,7 @@ function Header({
     </header>
   );
 }
-/* ────────────────────────────────────────────────────────────── UPLOAD HERO */
+/* \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 UPLOAD HERO */
 
 const SLOT_META: Record<Slot, { title: string; desc: string; required?: boolean; icon: typeof FileSpreadsheet; accent: string }> = {
   sla:    { title: "SLA Overall",            desc: "Workbook with one sheet per KPI (KSL-1\u2026KM-2). Source of all KPI rates.", required: true, icon: FileSpreadsheet, accent: "from-[color:var(--chart-1)] to-[color:var(--primary-glow)]" },
@@ -341,7 +341,7 @@ function UploadHero({
         <p className="mx-auto mt-4 max-w-2xl text-sm text-muted-foreground sm:text-base">
           Drop the SLA overall workbook, an optional PCms KSL-5b deep-dive and an exclusions register.
           Get KPI compliance, monthly &amp; weekly trends, queue drill-down, exclusion crosscheck
-          and a dedicated KSL-5b reason analysis — instantly.
+          and a dedicated KSL-5b reason analysis \u2014 instantly.
         </p>
       </section>
 
@@ -423,7 +423,7 @@ function ValidationPanel({ report, override, setOverride }: { report: Validation
           ? <AlertTriangle className="h-4 w-4 text-[color:var(--danger)]" />
           : <Info className="h-4 w-4 text-[color:var(--warning)]" />}
         <h3 className="text-sm font-bold">
-          Validation · {errors.length} error{errors.length === 1 ? "" : "s"} · {warns.length} warning{warns.length === 1 ? "" : "s"}
+          Validation \u00b7 {errors.length} error{errors.length === 1 ? "" : "s"} \u00b7 {warns.length} warning{warns.length === 1 ? "" : "s"}
         </h3>
         {errors.length > 0 && (
           <label className="ml-auto inline-flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
@@ -454,7 +454,7 @@ function IssueRow({ issue }: { issue: ValidationIssue }) {
       <div className="min-w-0 flex-1">
         <p className="truncate">
           <span className="font-semibold text-foreground">{issue.file}</span>
-          {issue.sheet && <span className="text-muted-foreground"> · sheet &ldquo;{issue.sheet}&rdquo;</span>}
+          {issue.sheet && <span className="text-muted-foreground"> \u00b7 sheet &ldquo;{issue.sheet}&rdquo;</span>}
         </p>
         <p style={{ color }}>{issue.message}</p>
         {issue.hint && <p className="text-muted-foreground">{issue.hint}</p>}
@@ -481,7 +481,7 @@ function ExclusionMappingPreview({ mappings }: { mappings: SheetMapping[] }) {
           <div key={i} className="rounded-xl border border-border/40 bg-card/40 p-3">
             <p className="mb-2 text-xs font-semibold">
               <span className="text-foreground">{m.file}</span>
-              <span className="text-muted-foreground"> · sheet &ldquo;{m.sheet}&rdquo;</span>
+              <span className="text-muted-foreground"> \u00b7 sheet &ldquo;{m.sheet}&rdquo;</span>
             </p>
             <div className="overflow-hidden rounded-lg border border-border/40">
               <table className="w-full text-xs">
@@ -502,7 +502,7 @@ function ExclusionMappingPreview({ mappings }: { mappings: SheetMapping[] }) {
                       <tr key={j} className="border-t border-border/40">
                         <td className="px-3 py-2 font-medium">{r.required}</td>
                         <td className="px-3 py-2 text-muted-foreground">
-                          {r.candidate ? <code className="rounded bg-secondary/60 px-1.5 py-0.5">{r.candidate}</code> : <span className="italic">— not found —</span>}
+                          {r.candidate ? <code className="rounded bg-secondary/60 px-1.5 py-0.5">{r.candidate}</code> : <span className="italic">\u2014 not found \u2014</span>}
                         </td>
                         <td className="px-3 py-2">
                           {r.status === "ok"
@@ -618,7 +618,7 @@ function UploadCard({ slot, files, onAdd, onRemove }: {
   );
 }
 
-/* ──────────────────────────────────────────────────────────── ANALYSIS */
+/* \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 ANALYSIS */
 
 /**
  * Keeps track of which tabs have ever been activated so we can mount their
@@ -744,7 +744,7 @@ function TabTrigger({ value, icon: Icon, children }: { value: string; icon: type
 
 
 
-/* ─────────────────────────────────────────────────────── OVERVIEW */
+/* \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 OVERVIEW */
 
 const OverviewSection = React.memo(function OverviewSection({ ds, month, detected }: { ds: Dataset; month: string | null; detected: KpiCode[] }) {
   const totals = useMemo(() => {
@@ -844,7 +844,7 @@ const KpiTile = React.memo(function KpiTile({ ds, code, month }: { ds: Dataset; 
           <p>Target {meta.targetLabel}</p>
           {excludedCount > 0 && (
             <p className="inline-flex items-center gap-1">
-              {excludedCount.toLocaleString()} excluded ·
+              {excludedCount.toLocaleString()} excluded \u00b7
               {delta > 0
                 ? <ArrowUp className="h-3 w-3 text-[color:var(--success)]" />
                 : delta < 0
@@ -910,7 +910,7 @@ function RagBadge({ rag, isKM }: { rag: "green" | "amber" | "red" | "none"; isKM
   return <span className={cn("rounded-full border px-2 py-0.5 text-[10px] font-bold tracking-wide", map)}>{ragLabel(rag, isKM)}</span>;
 }
 
-/* ─────────────────────────────────────────────────── MONTHLY */
+/* \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 MONTHLY */
 
 const MonthlySection = React.memo(function MonthlySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) {
   return (
@@ -948,765 +948,4 @@ const MonthlySection = React.memo(function MonthlySection({ ds, detected }: { ds
                       dot={(props: any) => {
                         const { cx, cy, payload, index } = props;
                         const c = payload.rag === "green" ? "var(--success)" : payload.rag === "amber" ? "var(--warning)" : payload.rag === "red" ? "var(--danger)" : "var(--muted-foreground)";
-                        return <circle key={index} cx={cx} cy={cy} r={4} fill={c} stroke={meta.color} strokeWidth={1.5} />;
-                      }}
-                      activeDot={{ r: 6 }}
-                    />
-                  </LineChart>
-                )}</ChartFrame>
-              )}
-          </Panel>
-        );
-      })}
-    </div>
-  );
-});
-
-/* ─────────────────────────────────────────────────── WEEKLY */
-
-const WeeklySection = React.memo(function WeeklySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) {
-  return (
-    <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-      {detected.map((code) => {
-        const meta = KPI_META[code];
-        const raw = weeklySummary(ds, code).map((p) => ({ ...p, label: weekLabel(p.label) }));
-        const data = withDeltas(raw);
-        const amber = amberBound(meta);
-        const dotColor = (rag: string) =>
-          rag === "green" ? "var(--success)"
-          : rag === "amber" ? "var(--warning)"
-          : rag === "red" ? "var(--danger)"
-          : "var(--muted-foreground)";
-        const values = data.map((d) => d.rate).filter((v) => Number.isFinite(v));
-        const minY = values.length ? Math.floor(Math.min(...values, meta.target) - 1.5) : "auto";
-        const maxY = values.length ? Math.ceil(Math.max(...values, meta.target) + 1.5) : "auto";
-        return (
-          <Panel key={code} title={`${code} · last 6 weeks`} subtitle={meta.what} badge={meta.targetLabel} >
-            {data.length === 0
-              ? <Empty message="No weekly data for this KPI." />
-              : (
-                <>
-                  <ChartFrame height={260}>{(width) => (
-                    <LineChart width={width} height={260} data={data} margin={{ top: 26, right: 28, left: 4, bottom: 6 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                      <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-                      <YAxis
-                        tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-                        tickFormatter={(v) => `${Math.round(v)}%`}
-                        domain={[minY as number | "auto", maxY as number | "auto"]}
-                      />
-                      <Tooltip content={<RichTip meta={meta} />} cursor={{ stroke: "var(--border)", strokeDasharray: "3 3" }} />
-                      <ReferenceLine
-                        y={meta.target}
-                        stroke="var(--success)"
-                        strokeDasharray="5 4"
-                        ifOverflow="extendDomain"
-                        label={{ value: `target ${meta.targetLabel}`, fontSize: 10, fill: "var(--success)", position: "insideTopRight" }}
-                      />
-                      <ReferenceLine
-                        y={amber}
-                        stroke="var(--warning)"
-                        strokeDasharray="2 4"
-                        ifOverflow="extendDomain"
-                        label={{ value: meta.isKM ? "watch ceiling" : "watch floor", fontSize: 10, fill: "var(--warning)", position: "insideBottomRight" }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="rate"
-                        stroke={meta.color}
-                        strokeWidth={2.5}
-                        isAnimationActive={false}
-                        dot={(props: any) => {
-                          const { cx, cy, payload, index } = props;
-                          return <circle key={index} cx={cx} cy={cy} r={5} fill={dotColor(payload.rag)} stroke={meta.color} strokeWidth={1.5} />;
-                        }}
-                        activeDot={{ r: 7 }}
-                      >
-                        <LabelList
-                          dataKey="rate"
-                          position="top"
-                          offset={10}
-                          formatter={(v: number) => (Number.isFinite(v) ? `${v.toFixed(1)}%` : "")}
-                          style={{ fontSize: 11, fontWeight: 600, fill: "var(--foreground)" }}
-                        />
-                      </Line>
-                    </LineChart>
-                  )}</ChartFrame>
-                  <WeeklyTable rows={data} isKM={meta.isKM} />
-                </>
-              )}
-          </Panel>
-        );
-      })}
-    </div>
-  );
-});
-
-type WeeklyTableRow = { label: string; total: number; breaches: number; rate: number; rag: "green" | "amber" | "red" | "none"; delta: number | null; prev: number | null };
-function WeeklyTable({ rows, isKM }: { rows: WeeklyTableRow[]; isKM: boolean }) {
-  return (
-    <div className="mt-4 overflow-x-auto rounded-xl border border-border/50">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="h-8 text-[11px]">Week</TableHead>
-            <TableHead className="h-8 text-right text-[11px]">Tickets</TableHead>
-            <TableHead className="h-8 text-right text-[11px]">Breaches</TableHead>
-            <TableHead className="h-8 text-right text-[11px]">Rate</TableHead>
-            <TableHead className="h-8 text-right text-[11px]">\u0394 vs prev</TableHead>
-            <TableHead className="h-8 text-right text-[11px]">Status</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((r) => {
-            const goodDelta = r.delta == null ? null : (isKM ? r.delta < 0 : r.delta > 0);
-            const deltaColor = r.delta == null ? "var(--muted-foreground)"
-              : goodDelta ? "var(--success)"
-              : r.delta === 0 ? "var(--muted-foreground)" : "var(--danger)";
-            const rateColor = r.rag === "green" ? "var(--success)" : r.rag === "amber" ? "var(--warning)" : r.rag === "red" ? "var(--danger)" : undefined;
-            return (
-              <TableRow key={r.label}>
-                <TableCell className="py-1.5 text-xs font-medium">{r.label}</TableCell>
-                <TableCell className="py-1.5 text-right text-xs tabular-nums">{r.total.toLocaleString()}</TableCell>
-                <TableCell className="py-1.5 text-right text-xs tabular-nums">{r.breaches.toLocaleString()}</TableCell>
-                <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums" style={{ color: rateColor }}>{r.rate.toFixed(1)}%</TableCell>
-                <TableCell className="py-1.5 text-right text-xs tabular-nums" style={{ color: deltaColor }}>
-                  {r.delta == null ? "\u2014" : `${r.delta > 0 ? "+" : ""}${r.delta.toFixed(1)}pp`}
-                </TableCell>
-                <TableCell className="py-1.5 text-right">
-                  <span className="inline-block h-2 w-2 rounded-full align-middle" style={{ background: rateColor ?? "var(--muted-foreground)" }} aria-label={r.rag} />
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-/* ─────────────────────────────────────────────────── QUEUES */
-
-const QueuesSection = React.memo(function QueuesSection({
-  ds,
-  month,
-  detected,
-  activeKpi,
-  setActiveKpi,
-}: {
-  ds: Dataset;
-  month: string | null;
-  detected: KpiCode[];
-  activeKpi: KpiCode;
-  setActiveKpi: (k: KpiCode) => void;
-}) {
-  const safe = detected.includes(activeKpi) ? activeKpi : (detected[0] ?? "KSL-2c");
-  const meta = KPI_META[safe];
-
-  const queues = useMemo(() => {
-    return queueBreakdown(ds, safe, month);
-  }, [ds, safe, month]);
-
-  const [selectedQueue, setSelectedQueue] = useState<string | null>(null);
-  
-useEffect(() => {
-  setSelectedQueue(null);
-}, [safe, month]);
-  
-  const effectiveQueue = useMemo(() => {
-    if (!queues.length) return null;
-    if (selectedQueue && queues.some((q) => q.queue === selectedQueue)) return selectedQueue;
-    return queues[0].queue;
-  }, [queues, selectedQueue]);
-
-  const weeklyData = useMemo(() => {
-    if (!effectiveQueue) return [];
-
-    return withDeltas(
-      weeklyQueueSummary(ds, safe, effectiveQueue, { lastN: 6 }).map((p) => ({
-        ...p,
-        label: weekLabel(p.label),
-      })),
-    );
-  }, [ds, safe, effectiveQueue]);
-
-  const amber = amberBound(meta);
-
-  const dotColor = (rag: string) =>
-    rag === "green"
-      ? "var(--success)"
-      : rag === "amber"
-        ? "var(--warning)"
-        : rag === "red"
-          ? "var(--danger)"
-          : "var(--muted-foreground)";
-
-  const values = weeklyData.map((d) => d.rate).filter((v) => Number.isFinite(v));
-  const minY = values.length ? Math.floor(Math.min(...values, meta.target) - 1.5) : "auto";
-  const maxY = values.length ? Math.ceil(Math.max(...values, meta.target) + 1.5) : "auto";
-
-  return (
-    <>
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          KPI
-        </span>
-
-        <Select value={safe} onValueChange={(v) => setActiveKpi(v as KpiCode)}>
-          <SelectTrigger className="h-9 w-56 rounded-full glass">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {detected.map((code) => (
-              <SelectItem key={code} value={code}>
-                {code} · {KPI_META[code].what}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Queue
-        </span>
-
-        <Select
-          value={effectiveQueue ?? "__none__"}
-          onValueChange={(v) => setSelectedQueue(v === "__none__" ? null : v)}
-        >
-          <SelectTrigger className="h-9 w-64 rounded-full glass">
-            <SelectValue placeholder="Select queue" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__" disabled>
-              {queues.length ? "Select queue" : "No queues"}
-            </SelectItem>
-            {queues.map((q) => (
-              <SelectItem key={q.queue} value={q.queue}>
-                {q.queue} · {q.total} tickets
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Badge variant="secondary" className="ml-auto">
-          {queues.length} queues
-        </Badge>
-      </div>
-
-      <Panel
-        title={`${safe} · ${effectiveQueue ?? "\u2014"} · weekly trend`}
-        subtitle={meta.what}
-        badge={meta.targetLabel}
-      >
-        {weeklyData.length === 0 ? (
-          <Empty message="No weekly data for this queue." />
-        ) : (
-          <>
-            <ChartFrame height={260}>
-              {(width) => (
-                <LineChart
-                  width={width}
-                  height={260}
-                  data={weeklyData}
-                  margin={{ top: 26, right: 28, left: 4, bottom: 6 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-                    tickFormatter={(v) => `${Math.round(v)}%`}
-                    domain={[minY as number | "auto", maxY as number | "auto"]}
-                  />
-                  <Tooltip
-                    content={<RichTip meta={meta} />}
-                    cursor={{ stroke: "var(--border)", strokeDasharray: "3 3" }}
-                  />
-                  <ReferenceLine
-                    y={meta.target}
-                    stroke="var(--success)"
-                    strokeDasharray="5 4"
-                    ifOverflow="extendDomain"
-                    label={{
-                      value: `target ${meta.targetLabel}`,
-                      fontSize: 10,
-                      fill: "var(--success)",
-                      position: "insideTopRight",
-                    }}
-                  />
-                  <ReferenceLine
-                    y={amber}
-                    stroke="var(--warning)"
-                    strokeDasharray="2 4"
-                    ifOverflow="extendDomain"
-                    label={{
-                      value: meta.isKM ? "watch ceiling" : "watch floor",
-                      fontSize: 10,
-                      fill: "var(--warning)",
-                      position: "insideBottomRight",
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="rate"
-                    stroke={meta.color}
-                    strokeWidth={2.5}
-                    isAnimationActive={false}
-                    dot={(props: any) => {
-                      const { cx, cy, payload, index } = props;
-                      return (
-                        <circle
-                          key={index}
-                          cx={cx}
-                          cy={cy}
-                          r={5}
-                          fill={dotColor(payload.rag)}
-                          stroke={meta.color}
-                          strokeWidth={1.5}
-                        />
-                      );
-                    }}
-                    activeDot={{ r: 7 }}
-                  >
-                    <LabelList
-                      dataKey="rate"
-                      position="top"
-                      offset={10}
-                      formatter={(v: number) =>
-                        Number.isFinite(v) ? `${v.toFixed(1)}%` : ""
-                      }
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 600,
-                        fill: "var(--foreground)",
-                      }}
-                    />
-                  </Line>
-                </LineChart>
-              )}
-            </ChartFrame>
-
-            <WeeklyTable rows={weeklyData} isKM={meta.isKM} />
-          </>
-        )}
-      </Panel>
-
-      <Panel
-        title="All queues for this KPI"
-        subtitle="Ranked by ticket volume — click a row to drill in"
-      >
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Queue</TableHead>
-                <TableHead className="text-right">Tickets</TableHead>
-                <TableHead className="text-right">Breaches</TableHead>
-                <TableHead className="text-right">Rate</TableHead>
-                <TableHead className="text-right">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {queues.map((q) => (
-                <TableRow
-                  key={q.queue}
-                  className={cn("cursor-pointer", q.queue === effectiveQueue && "bg-primary/5")}
-                  onClick={() => setSelectedQueue(q.queue)}
-                >
-                  <TableCell className="font-medium">{q.queue}</TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {q.total.toLocaleString()}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {q.breaches.toLocaleString()}
-                  </TableCell>
-                  <TableCell
-                    className="text-right font-semibold tabular-nums"
-                    style={{
-                      color:
-                        q.rag === "green"
-                          ? "var(--success)"
-                          : q.rag === "amber"
-                            ? "var(--warning)"
-                            : q.rag === "red"
-                              ? "var(--danger)"
-                              : undefined,
-                    }}
-                  >
-                    {q.display}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <RagBadge rag={q.rag} isKM={meta.isKM} />
-                  </TableCell>
-                </TableRow>
-              ))}
-
-              {queues.length === 0 && (
-                <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="py-10 text-center text-sm text-muted-foreground"
-                  >
-                    No queues for this filter.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </Panel>
-    </>
-  );
-});
-
-/* ─────────────────────────────────────────────────── EXCLUSION IMPACT */
-
-function ExclusionSection({ ds, month, detected }: { ds: Dataset; month: string | null; detected: KpiCode[] }) {
-  return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-      {detected.map((code) => {
-        const meta = KPI_META[code];
-        const e = exclusionImpact(ds, code, month);
-        if (e.excluded === 0) {
-          return (
-            <Panel key={code} title={code} subtitle={meta.what} badge="no exclusions">
-              <p className="py-6 text-center text-xs text-muted-foreground">
-                {e.rawTotal.toLocaleString()} tickets · {e.rawBreaches.toLocaleString()} breaches · no rows excluded.
-              </p>
-            </Panel>
-          );
-        }
-        const delta = e.adj.value - e.raw.value;
-        const positive = delta > 0;
-        return (
-          <Panel key={code} title={code} subtitle={meta.what} badge={`${e.excluded} excluded`}>
-            <div className="flex items-end gap-3">
-              <p className="font-display text-3xl font-bold tabular-nums" style={{ color: e.adj.rag === "green" ? "var(--success)" : e.adj.rag === "amber" ? "var(--warning)" : e.adj.rag === "red" ? "var(--danger)" : undefined }}>
-                {e.adj.display}
-              </p>
-              <span className="pb-1 text-xs text-muted-foreground line-through">{e.raw.display}</span>
-              <span className={cn(
-                "ml-auto inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold",
-                positive
-                  ? "border-[color:var(--success)]/30 bg-[color:var(--success)]/10 text-[color:var(--success)]"
-                  : "border-[color:var(--danger)]/30 bg-[color:var(--danger)]/10 text-[color:var(--danger)]",
-              )}>
-                {positive ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-                {Math.abs(delta).toFixed(1)}pp
-              </span>
-            </div>
-            <div className="mt-3 grid grid-cols-3 gap-2 text-[11px]">
-              <Mini label="Raw total" value={e.rawTotal.toLocaleString()} />
-              <Mini label="Excluded" value={e.excluded.toLocaleString()} />
-              <Mini label="Adj. breaches" value={e.adjBreaches.toLocaleString()} />
-            </div>
-          </Panel>
-        );
-      })}
-    </div>
-  );
-}
-
-function Mini({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-border/60 bg-secondary/40 px-2.5 py-1.5">
-      <p className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="font-semibold tabular-nums">{value}</p>
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────────── Shared panel + helpers */
-
-function Panel({
-  title,
-  subtitle,
-  badge,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  badge?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="glass overflow-hidden rounded-2xl ring-soft">
-      <header className="flex items-center gap-3 border-b border-border/60 px-5 py-3">
-        <div className="min-w-0">
-          <h2 className="font-display text-sm font-bold leading-tight">{title}</h2>
-          {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
-        </div>
-        {badge && (
-          <Badge variant="secondary" className="ml-auto whitespace-nowrap text-[10px]">
-            {badge}
-          </Badge>
-        )}
-      </header>
-      <div className="p-4">
-        <DeferredMount>{children}</DeferredMount>
-      </div>
-    </section>
-  );
-}
-
-function Empty({ message }: { message: string }) {
-  return <p className="py-10 text-center text-xs text-muted-foreground">{message}</p>;
-}
-
-function ChartFrame({
-  height,
-  children,
-}: {
-  height: number;
-  children: (width: number) => React.ReactNode;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState<number>(0);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-
-    let frame = 0;
-    let ro: ResizeObserver | null = null;
-
-    const update = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const next = Math.max(0, Math.floor(el.clientWidth));
-        setWidth((prev) => (prev !== next ? next : prev));
-      });
-    };
-
-    update();
-
-    if (typeof ResizeObserver !== "undefined") {
-      ro = new ResizeObserver(() => update());
-      ro.observe(el);
-    } else {
-      window.addEventListener("resize", update, { passive: true });
-    }
-
-    return () => {
-      cancelAnimationFrame(frame);
-      ro?.disconnect();
-      window.removeEventListener("resize", update);
-    };
-  }, []);
-
-  return (
-    <div ref={ref} className="w-full" style={{ height }}>
-      {width > 40 ? (
-        children(width)
-      ) : (
-        <div style={{ height }} className="w-full animate-pulse rounded bg-secondary/30" />
-      )}
-    </div>
-  );
-}
-
-function RichTip({ active, payload, label, meta }: any) {
-  if (!active || !payload?.length) return null;
-  const row = payload[0]?.payload ?? {};
-  const rate: number = Number(row.rate ?? 0);
-  const prev: number | null = row.prev != null ? Number(row.prev) : null;
-  const delta = prev == null ? null : rate - prev;
-  const gap = rate - meta.target;
-  const ragColor =
-    row.rag === "green"
-      ? "var(--success)"
-      : row.rag === "amber"
-        ? "var(--warning)"
-        : row.rag === "red"
-          ? "var(--danger)"
-          : "var(--muted-foreground)";
-  const ragText = ragLabel(row.rag ?? "none", meta.isKM);
-  const gapGood = meta.isKM ? gap <= 0 : gap >= 0;
-  return (
-    <div className="glass min-w-[160px] rounded-xl border border-border/60 p-3 text-xs shadow-lg">
-      <p className="mb-1.5 font-bold" style={{ color: ragColor }}>{ragText}</p>
-      <p className="font-semibold tabular-nums" style={{ color: ragColor }}>{rate.toFixed(2)}%</p>
-      <p className="text-muted-foreground">target {meta.targetLabel}</p>
-      <p className={cn("tabular-nums", gapGood ? "text-[color:var(--success)]" : "text-[color:var(--danger)]")}>
-        gap {gap >= 0 ? "+" : ""}{gap.toFixed(2)}pp
-      </p>
-      {delta != null && (
-        <p className="mt-1 border-t border-border/40 pt-1 tabular-nums text-muted-foreground">
-          \u0394 {delta >= 0 ? "+" : ""}{delta.toFixed(2)}pp vs prev
-        </p>
-      )}
-      {row.total != null && (
-        <p className="tabular-nums text-muted-foreground">
-          {row.total.toLocaleString()} tickets · {row.breaches?.toLocaleString()} breaches
-        </p>
-      )}
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────────── QUALITY / REOPEN */
-
-function QualityReopenSection({ ds, month, detected }: { ds: Dataset; month: string | null; detected: KpiCode[] }) {
-  const qualityCodes: KpiCode[] = ["KSL-4", "KM-1"];
-  const present = qualityCodes.filter((c) => detected.includes(c));
-  if (!present.length) {
-    return <Empty message="No KSL-4 or KM-1 data detected in this workbook." />;
-  }
-  return (
-    <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-      {present.map((code) => {
-        const meta = KPI_META[code];
-        const data = withDeltas(monthlySummary(ds, code).map((p) => ({ ...p, label: monthLabel(p.label) })));
-        const amber = amberBound(meta);
-        const barColor = (rag: string) =>
-          rag === "green" ? "var(--success)" : rag === "amber" ? "var(--warning)" : rag === "red" ? "var(--danger)" : "var(--muted-foreground)";
-        return (
-          <Panel key={code} title={`${code} · ${meta.what}`} badge={meta.targetLabel}>
-            {data.length === 0 ? (
-              <Empty message={`No data for ${code}.`} />
-            ) : (
-              <ChartFrame height={240}>{(width) => (
-                <ComposedChart width={width} height={240} data={data} margin={{ top: 20, right: 24, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-                  <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} />
-                  <Tooltip content={<RichTip meta={meta} />} cursor={{ stroke: "var(--border)", strokeDasharray: "3 3" }} />
-                  <ReferenceLine y={meta.target} stroke="var(--success)" strokeDasharray="5 4" ifOverflow="extendDomain"
-                    label={{ value: `target ${meta.targetLabel}`, fontSize: 10, fill: "var(--success)", position: "insideTopRight" }} />
-                  <ReferenceLine y={amber} stroke="var(--warning)" strokeDasharray="2 4" ifOverflow="extendDomain"
-                    label={{ value: meta.isKM ? "ceiling" : "floor", fontSize: 10, fill: "var(--warning)", position: "insideBottomRight" }} />
-                  <Bar dataKey="rate" radius={[4, 4, 0, 0]} isAnimationActive={false}
-                    label={{ position: "top", fontSize: 10, fill: "var(--foreground)", formatter: (v: number) => `${v.toFixed(1)}%` }}>
-                    {data.map((entry, index) => (
-                      <rect key={`rect-${index}`} fill={barColor(entry.rag)} />
-                    ))}
-                  </Bar>
-                  <Line type="monotone" dataKey="rate" stroke={meta.color} strokeWidth={2} dot={false} isAnimationActive={false} />
-                </ComposedChart>
-              )}</ChartFrame>
-            )}
-          </Panel>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────────── KSL-5b DETAIL */
-
-function Ksl5bDetail({ ds, month }: { ds: Dataset; month: string | null }) {
-  const weekly = useMemo(() => pcmsWeeklyCounts(ds, { lastN: 8 }), [ds]);
-  const topAgents = useMemo(() => pcmsTopAgents(ds, month, { topN: 15 }), [ds, month]);
-
-  if (!ds.pcms.length) {
-    return <Empty message="No PCms data uploaded — drop the KSL-5b deep-dive file on the upload screen." />;
-  }
-
-  const reasons = useMemo(() => {
-    const filtered = month ? ds.pcms.filter((r) => r.month === month) : ds.pcms;
-    const map = new Map<string, { ko: number; nok: number }>();
-    filtered.forEach((r) => {
-      const key = r.reason || "Unknown";
-      const cur = map.get(key) ?? { ko: 0, nok: 0 };
-      if (r.result === "KO") cur.ko++;
-      else cur.nok++;
-      map.set(key, cur);
-    });
-    return Array.from(map.entries())
-      .map(([reason, v]) => ({ reason, ...v, total: v.ko + v.nok }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 12);
-  }, [ds, month]);
-
-  return (
-    <div className="space-y-5">
-      <Panel title="KSL-5b · Reason breakdown" subtitle="KO vs NOK by category">
-        {reasons.length === 0 ? (
-          <Empty message="No reason data for this period." />
-        ) : (
-          <ChartFrame height={320}>{(width) => (
-            <BarChart width={width} height={320} data={reasons} layout="vertical" margin={{ top: 4, right: 48, left: 8, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
-              <YAxis type="category" dataKey="reason" width={160} tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
-              <Tooltip cursor={{ fill: "var(--secondary)" }} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="ko" name="KO" stackId="a" fill="var(--success)" isAnimationActive={false}>
-                <LabelList dataKey="ko" position="right" style={{ fontSize: 10, fill: "var(--foreground)" }} />
-              </Bar>
-              <Bar dataKey="nok" name="NOK" stackId="a" fill="var(--danger)" radius={[0, 4, 4, 0]} isAnimationActive={false}>
-                <LabelList dataKey="nok" position="right" style={{ fontSize: 10, fill: "var(--foreground)" }} />
-              </Bar>
-            </BarChart>
-          )}</ChartFrame>
-        )}
-      </Panel>
-
-      <Panel title="KSL-5b · Weekly KO/NOK volume" subtitle="Last 8 weeks">
-        {weekly.length === 0 ? (
-          <Empty message="No weekly PCms data." />
-        ) : (
-          <ChartFrame height={240}>{(width) => (
-            <BarChart width={width} height={240} data={weekly} margin={{ top: 16, right: 16, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-              <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-              <Tooltip cursor={{ fill: "var(--secondary)" }} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="ko" name="KO" stackId="a" fill="var(--success)" isAnimationActive={false} />
-              <Bar dataKey="nok" name="NOK" stackId="a" fill="var(--danger)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
-            </BarChart>
-          )}</ChartFrame>
-        )}
-      </Panel>
-
-      <Panel title="KSL-5b · Top agents by NOK" subtitle="Highest NOK count — filtered by selected period">
-        {topAgents.length === 0 ? (
-          <Empty message="No agent data." />
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>#</TableHead>
-                  <TableHead>Agent</TableHead>
-                  <TableHead className="text-right">KO</TableHead>
-                  <TableHead className="text-right">NOK</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="text-right">NOK %</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {topAgents.map((a, i) => (
-                  <TableRow key={a.agent}>
-                    <TableCell className="text-muted-foreground">{i + 1}</TableCell>
-                    <TableCell className="font-medium">{a.agent}</TableCell>
-                    <TableCell className="text-right tabular-nums text-[color:var(--success)]">{a.ko}</TableCell>
-                    <TableCell className="text-right tabular-nums text-[color:var(--danger)]">{a.nok}</TableCell>
-                    <TableCell className="text-right tabular-nums">{a.total}</TableCell>
-                    <TableCell className="text-right tabular-nums font-semibold">{a.nokPct.toFixed(1)}%</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </Panel>
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────────── helpers */
-
-function withDeltas<T extends { rate: number }>(rows: T[]): (T & { delta: number | null; prev: number | null })[] {
-  return rows.map((r, i) => ({
-    ...r,
-    prev: i === 0 ? null : rows[i - 1].rate,
-    delta: i === 0 ? null : r.rate - rows[i - 1].rate,
-  }));
-}
-
-function amberBound(meta: (typeof KPI_META)[KpiCode]): number {
-  return meta.isKM ? meta.target * 1.1 : meta.target * 0.97;
-}
+                        return <circle key={index} cx={cx} cy={cy} r={4} fill={c} stroke={meta.co
