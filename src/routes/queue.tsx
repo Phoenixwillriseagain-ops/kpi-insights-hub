@@ -53,14 +53,17 @@ const COLORS = [
 
 /* ── column-detection hints ───────────────────────────────────── */
 const COL_HINTS: Record<string, string[]> = {
-  id:          ["id","ticket_id","ticketid","case_id","number","ref","reference"],
-  created:     ["created","created_at","createdat","date","open_date","opened","submitted","timestamp"],
-  updated:     ["updated","updated_at","modified","resolved_at","closed_at","last_update"],
-  status:      ["status","state","ticket_status"],
-  queue:       ["queue","group","team","department","category","type"],
+  id:          ["id","ticket_id","ticketid","case_id","number","ref","reference",
+                "incident_ticket","incidentticket","incident ticket"],
+  created:     ["created","created_at","createdat","date","open_date","opened","submitted","timestamp",
+                "date_open","dateopen","date_time_breach","datetimebreach"],
+  updated:     ["updated","updated_at","modified","resolved_at","closed_at","last_update",
+                "date_close","dateclose"],
+  status:      ["status","state","ticket_status","sla_code","slacode"],
+  queue:       ["queue","group","team","department","category","type","topic","sla_n","slan"],
   agent:       ["agent","assigned","assignee","owner","handler","resolved_by","assigned_to"],
-  subject:     ["subject","title","summary","description","issue"],
-  priority:    ["priority","severity","urgency"],
+  subject:     ["subject","title","summary","description","issue","topic","breach_description","breachdescription"],
+  priority:    ["priority","severity","urgency","sla_code","slacode"],
   handle_time: ["handle_time","handling_time","duration","time_spent","resolution_time","ttr","tat","handle_time_h"],
 };
 
@@ -103,6 +106,19 @@ function groupCount<T>(arr: T[], fn: (x: T) => string): Record<string, number> {
 const isResolved = (s: string) => /resolv|closed|done|complet/i.test(s);
 const isOpen     = (s: string) => /open|new|pending|progress/i.test(s);
 const isBreach   = (s: string) => /breach|overdue|escalat/i.test(s);
+
+/* ── xlsx: pick first sheet with actual data ──────────────────── */
+function pickSheetCsv(workbook: XLSX.WorkBook): string {
+  for (const name of workbook.SheetNames) {
+    const sheet = workbook.Sheets[name];
+    const csv = XLSX.utils.sheet_to_csv(sheet);
+    // need at least a header line + one data line, both non-empty
+    const lines = csv.split("\n").filter(l => l.replace(/,/g, "").trim().length > 0);
+    if (lines.length >= 2) return csv;
+  }
+  // fallback to first sheet
+  return XLSX.utils.sheet_to_csv(workbook.Sheets[workbook.SheetNames[0]]);
+}
 
 /* ── demo data ────────────────────────────────────────────────── */
 function buildDemo(): string {
@@ -219,8 +235,8 @@ export default function QueueAnalyzerPage() {
       reader.onload = e => {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array", cellDates: true });
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const csv = XLSX.utils.sheet_to_csv(firstSheet);
+        // pick the first sheet that actually has data rows (skips Instructions etc.)
+        const csv = pickSheetCsv(workbook);
         parseCSV(csv, name);
       };
       reader.readAsArrayBuffer(f);
