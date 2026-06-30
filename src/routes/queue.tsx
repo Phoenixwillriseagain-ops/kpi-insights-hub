@@ -52,9 +52,6 @@ const COLORS = [
 ];
 
 /* ── column-detection hints ───────────────────────────────────── */
-// NOTE: order matters — more specific/exact names must come first.
-// Do NOT include names that overlap with other fields (e.g. sla_n belongs
-// to status/priority, NOT queue).
 const COL_HINTS: Record<string, string[]> = {
   id:          ["incident ticket","incidentticket","incident_ticket",
                 "id","ticket_id","ticketid","case_id","number","ref","reference"],
@@ -65,7 +62,6 @@ const COL_HINTS: Record<string, string[]> = {
                 "updated","updated_at","modified","resolved_at","closed_at","last_update"],
   status:      ["sla_code","slacode",
                 "status","state","ticket_status"],
-  // queue: only exact queue/group/team/department names — no SLA field names
   queue:       ["queue","group","team","department","category","type","topic"],
   agent:       ["agent","assigned","assignee","owner","handler","resolved_by","assigned_to"],
   subject:     ["breach_description","breachdescription",
@@ -77,13 +73,11 @@ const COL_HINTS: Record<string, string[]> = {
 function detectCol(headers: string[], key: string): string | null {
   const hints = COL_HINTS[key];
   const normalized = headers.map(x => x.toLowerCase().replace(/[\s_.\-]/g, ""));
-  // Pass 1: exact match only
   for (const hint of hints) {
     const norm = hint.replace(/[\s_.\-]/g, "");
     const idx = normalized.findIndex(x => x === norm);
     if (idx > -1) return headers[idx];
   }
-  // Pass 2: prefix / contains match (fallback)
   for (const hint of hints) {
     const norm = hint.replace(/[\s_.\-]/g, "");
     const idx = normalized.findIndex(x => x.startsWith(norm) || norm.startsWith(x));
@@ -103,6 +97,7 @@ interface ParsedRow {
   _createdDate: Date | null;
   _updatedDate: Date | null;
   _handleHours: number | null;
+  _sheet?: string;
 }
 
 /* ── helpers ──────────────────────────────────────────────────── */
@@ -121,16 +116,67 @@ const isResolved = (s: string) => /resolv|closed|done|complet/i.test(s);
 const isOpen     = (s: string) => /open|new|pending|progress/i.test(s);
 const isBreach   = (s: string) => /breach|overdue|escalat/i.test(s);
 
-/* ── xlsx: pick first sheet with actual data ──────────────────── */
-function pickSheetCsv(workbook: XLSX.WorkBook): string {
-  for (const name of workbook.SheetNames) {
-    if (name === "Instructions") continue;
-    const sheet = workbook.Sheets[name];
-    const csv = XLSX.utils.sheet_to_csv(sheet);
-    const lines = csv.split("\n").filter(l => l.replace(/,/g, "").trim().length > 0);
-    if (lines.length >= 2) return csv;
+/* ── xlsx: merge ALL sheets into one CSV ───────────────────────── */
+// Reads every sheet (except "Instructions"), uses the first valid
+// sheet’s header as the master header, then appends data rows from
+// all other sheets underneath it. A "_Sheet" column is added so
+// the KPI tab name (KSL-4, KM-1, KSL-5a …) is visible per row.
+function mergeAllSheetsCsv(workbook: XLSX.WorkBook): string {
+  const SKIP = /^instructions$/i;
+  const validSheets = workbook.SheetNames.filter(n => !SKIP.test(n));
+
+  // Collect { sheetName, headers, dataLines[] } for each non-empty sheet
+  type SheetData = { name: string; headers: string[]; lines: string[][] };
+  const sheets: SheetData[] = [];
+
+  for (const name of validSheets) {
+    const ws = workbook.Sheets[name];
+    // sheet_to_json with header:1 gives us raw arrays, no CSV escaping needed yet
+    const rows: string[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" }) as string[][];
+    // find first non-empty row as header
+    let hi = 0;
+    while (hi < rows.length && rows[hi].every(c => String(c).trim() === "")) hi++;
+    if (hi >= rows.length) continue;
+    const headers = rows[hi].map(c => String(c).trim());
+    if (headers.filter(Boolean).length === 0) continue;
+    const dataLines: string[][] = [];
+    for (let i = hi + 1; i < rows.length; i++) {
+      const r = rows[i];
+      if (r.every(c => String(c).trim() === "")) continue;
+      dataLines.push(r.map(c => String(c)));
+    }
+    if (dataLines.length === 0) continue;
+    sheets.push({ name, headers, lines: dataLines });
   }
-  return XLSX.utils.sheet_to_csv(workbook.Sheets[workbook.SheetNames[0]]);
+
+  if (sheets.length === 0) {
+    // absolute fallback
+    return XLSX.utils.sheet_to_csv(workbook.Sheets[workbook.SheetNames[0]]);
+  }
+
+  // Use first sheet’s headers as master; add _Sheet column
+  const masterHeaders = [...sheets[0].headers, "_Sheet"];
+
+  // CSV-escape a single cell value
+  const esc = (v: string) => {
+    if (v.includes(",") || v.includes('"') || v.includes("\n")) {
+      return '"' + v.replace(/"/g, '""') + '"';
+    }
+    return v;
+  };
+
+  const csvLines: string[] = [masterHeaders.map(esc).join(",")];
+
+  for (const sheet of sheets) {
+    for (const row of sheet.lines) {
+      // pad / trim row to match master header count (minus the _Sheet col we add)
+      const padded = masterHeaders.slice(0, -1).map((_, i) => row[i] ?? "");
+      padded.push(sheet.name); // _Sheet value
+      csvLines.push(padded.map(esc).join(","));
+    }
+  }
+
+  return csvLines.join("\n");
 }
 
 /* ── demo data ────────────────────────────────────────────────── */
@@ -187,14 +233,13 @@ export default function QueueAnalyzerPage() {
   const [fileName, setFileName] = useState("");
   const [drag,     setDrag]     = useState(false);
 
-  /* filters */
   const [fQueue,  setFQueue]  = useState("");
   const [fStatus, setFStatus] = useState("");
   const [fAgent,  setFAgent]  = useState("");
   const [fFrom,   setFFrom]   = useState("");
   const [fTo,     setFTo]     = useState("");
+  const [fSheet,  setFSheet]  = useState("");
 
-  /* tickets tab */
   const [tab,      setTab]      = useState("overview");
   const [tSearch,  setTSearch]  = useState("");
   const [tPage,    setTPage]    = useState(0);
@@ -202,13 +247,13 @@ export default function QueueAnalyzerPage() {
 
   const fileRef = useRef<HTMLInputElement>(null);
 
-  /* ── parse CSV text into rows ───────────────────────────────── */
   const parseCSV = useCallback((text: string, name: string) => {
     const { fields, data: raw } = parseCSVText(text);
     if (!raw.length) return;
     const cm: ColMap = {};
     for (const k of Object.keys(COL_HINTS)) cm[k] = detectCol(fields, k);
-    setColMap(cm); setAllCols(fields.slice(0, 12)); setFileName(name);
+    // expose up to 14 cols so _Sheet is visible in tickets tab
+    setColMap(cm); setAllCols(fields.slice(0, 14)); setFileName(name);
     const parsed: ParsedRow[] = raw.map(r => {
       const cd = cm.created ? new Date(r[cm.created] ?? "") : null;
       const ud = cm.updated ? new Date(r[cm.updated] ?? "") : null;
@@ -226,6 +271,7 @@ export default function QueueAnalyzerPage() {
         subject:     cm.subject     ? r[cm.subject]     ?? "" : "",
         priority:    cm.priority    ? r[cm.priority]    ?? "" : "",
         handle_time: cm.handle_time ? r[cm.handle_time] ?? "" : "",
+        _sheet:      r["_Sheet"] ?? "",
         _createdDate: cd && !isNaN(cd.getTime()) ? cd : null,
         _updatedDate: ud && !isNaN(ud.getTime()) ? ud : null,
         _handleHours: hh,
@@ -234,21 +280,19 @@ export default function QueueAnalyzerPage() {
     setAllRows(parsed);
     const dates = parsed.filter(r => r._createdDate).map(r => r._createdDate!).sort((a,b) => +a - +b);
     if (dates.length) { setFFrom(isoDate(dates[0])); setFTo(isoDate(dates[dates.length-1])); }
-    setFQueue(""); setFStatus(""); setFAgent("");
+    setFQueue(""); setFStatus(""); setFAgent(""); setFSheet("");
     setRows(parsed); setTab("overview"); setTPage(0); setTSearch("");
   }, []);
 
-  /* ── file handler — supports .csv and .xlsx/.xls ────────────── */
   const handleFile = (f: File) => {
     const name = f.name.replace(/\.(csv|xlsx|xls)$/i, "");
     const isExcel = /\.(xlsx|xls)$/i.test(f.name);
-
     if (isExcel) {
       const reader = new FileReader();
       reader.onload = e => {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array", cellDates: true });
-        const csv = pickSheetCsv(workbook);
+        const csv = mergeAllSheetsCsv(workbook);
         parseCSV(csv, name);
       };
       reader.readAsArrayBuffer(f);
@@ -259,7 +303,6 @@ export default function QueueAnalyzerPage() {
     }
   };
 
-  /* ── filtered rows ──────────────────────────────────────────── */
   const filtered = useMemo(() => {
     const from = fFrom ? new Date(fFrom) : null;
     const to   = fTo   ? new Date(fTo + "T23:59:59") : null;
@@ -267,11 +310,12 @@ export default function QueueAnalyzerPage() {
       if (fQueue  && r.queue  !== fQueue)  return false;
       if (fStatus && r.status !== fStatus) return false;
       if (fAgent  && r.agent  !== fAgent)  return false;
+      if (fSheet  && r._sheet !== fSheet)  return false;
       if (from && r._createdDate && r._createdDate < from) return false;
       if (to   && r._createdDate && r._createdDate > to)   return false;
       return true;
     });
-  }, [allRows, fQueue, fStatus, fAgent, fFrom, fTo]);
+  }, [allRows, fQueue, fStatus, fAgent, fSheet, fFrom, fTo]);
 
   useMemo(() => setRows(filtered), [filtered]);
 
@@ -280,6 +324,7 @@ export default function QueueAnalyzerPage() {
   const queues   = uniq(r => r.queue  ?? "");
   const statuses = uniq(r => r.status ?? "");
   const agents   = uniq(r => r.agent  ?? "");
+  const sheets   = uniq(r => r._sheet ?? "");
 
   const kpis = useMemo(() => {
     const total    = rows.length;
@@ -301,6 +346,11 @@ export default function QueueAnalyzerPage() {
   const queueData = useMemo(() => {
     const m = groupCount(rows, r => r.queue || "(none)");
     return Object.entries(m).sort((a,b) => b[1]-a[1]).slice(0,12).map(([name,value]) => ({ name, value }));
+  }, [rows]);
+
+  const sheetData = useMemo(() => {
+    const m = groupCount(rows, r => r._sheet || "(unknown)");
+    return Object.entries(m).sort((a,b) => b[1]-a[1]).map(([name, value]) => ({ name, value }));
   }, [rows]);
 
   const dailyData = useMemo(() => {
@@ -326,8 +376,7 @@ export default function QueueAnalyzerPage() {
       if (r._handleHours != null && r._handleHours > 0 && r._handleHours < 720) { m[a].htSum += r._handleHours; m[a].htCount++; }
     });
     return Object.entries(m).sort((a,b)=>b[1].total-a[1].total).slice(0,15).map(([agent,d]) => ({
-      agent,
-      total: d.total, resolved: d.resolved, open: d.open,
+      agent, total: d.total, resolved: d.resolved, open: d.open,
       resRate: d.total ? Math.round(d.resolved/d.total*100) : 0,
       avgHt: d.htCount ? +(d.htSum/d.htCount).toFixed(1) : null,
     }));
@@ -343,8 +392,7 @@ export default function QueueAnalyzerPage() {
       if (r.agent) m[q].agents[r.agent] = (m[q].agents[r.agent]||0)+1;
     });
     return Object.entries(m).sort((a,b) => (b[1].resolved+b[1].open)-(a[1].resolved+a[1].open)).map(([queue,d]) => ({
-      queue,
-      resolved: d.resolved, open: d.open,
+      queue, resolved: d.resolved, open: d.open,
       avgHt: d.htCount ? +(d.htSum/d.htCount).toFixed(1) : 0,
       topAgent: Object.entries(d.agents).sort((a,b)=>b[1]-a[1])[0]?.[0] ?? "—",
     }));
@@ -388,7 +436,6 @@ export default function QueueAnalyzerPage() {
   const dateSpan = allDates.length >= 2 ? `${fmtDate(allDates[0])} – ${fmtDate(allDates[allDates.length-1])}` : "";
 
   const reset = () => { setAllRows([]); setRows([]); setFileName(""); setTab("overview"); };
-
   const hasData = allRows.length > 0;
 
   return (
@@ -457,11 +504,11 @@ export default function QueueAnalyzerPage() {
               <div>
                 <h2 className="text-xl font-semibold">Drop your queue file here</h2>
                 <p className="mt-1 text-sm text-muted-foreground max-w-xs mx-auto">
-                  Upload a <strong>CSV</strong> or <strong>Excel (.xlsx / .xls)</strong> export from your ticketing system. Columns are auto-detected.
+                  Upload a <strong>CSV</strong> or <strong>Excel (.xlsx / .xls)</strong> export. All sheets are merged automatically.
                 </p>
               </div>
               <span className="pointer-events-none rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Choose File</span>
-              <p className="text-xs text-muted-foreground/60">Supports .csv · .xlsx · .xls · Processed entirely in your browser · No data leaves this page</p>
+              <p className="text-xs text-muted-foreground/60">Supports .csv · .xlsx · .xls · All tabs merged · Processed in your browser</p>
             </label>
             <div className="mt-8">
               <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-3">Or try with sample data</p>
@@ -480,7 +527,7 @@ export default function QueueAnalyzerPage() {
             <div className="mb-6">
               <h1 className="text-2xl font-bold tracking-tight">{fileName || "Queue Analysis"}</h1>
               <p className="text-sm text-muted-foreground mt-0.5">
-                {allRows.length.toLocaleString()} tickets{dateSpan && ` · ${dateSpan}`}
+                {allRows.length.toLocaleString()} rows across {sheets.length} sheet{sheets.length !== 1 ? "s" : ""}{dateSpan && ` · ${dateSpan}`}
               </p>
             </div>
 
@@ -491,7 +538,7 @@ export default function QueueAnalyzerPage() {
                 { label:"Resolved",       value: kpis.resolved.toLocaleString(), sub: `${kpis.resRate}% res. rate`, accent: "text-emerald-600 dark:text-emerald-400" },
                 { label:"Avg Handle",     value: kpis.avgHt != null ? kpis.avgHt.toFixed(1)+"h" : "—", sub: "per ticket", accent: "text-blue-600 dark:text-blue-400" },
                 { label:"Active Agents",  value: kpis.agentCount.toLocaleString(), sub: "in selection",          accent: "" },
-                { label:"Queues",         value: kpis.queueCount.toLocaleString(), sub: "in selection",          accent: "" },
+                { label:"KPI Sheets",     value: sheets.length.toLocaleString(), sub: "loaded",                  accent: "" },
               ].map(k => (
                 <div key={k.label} className="rounded-lg border bg-card px-4 py-4 shadow-sm">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">{k.label}</p>
@@ -501,17 +548,19 @@ export default function QueueAnalyzerPage() {
               ))}
             </div>
 
+            {/* filter bar — now includes KPI Sheet filter */}
             <div className="flex flex-wrap gap-3 items-end mb-6">
               {[
-                { label:"Queue",  id:"fq",  val:fQueue,  set:setFQueue,  opts:queues },
-                { label:"Status", id:"fs",  val:fStatus, set:setFStatus, opts:statuses },
-                { label:"Agent",  id:"fa",  val:fAgent,  set:setFAgent,  opts:agents },
+                { label:"KPI Sheet", id:"fsh", val:fSheet,  set:setFSheet,  opts:sheets },
+                { label:"Queue",    id:"fq",  val:fQueue,  set:setFQueue,  opts:queues },
+                { label:"Status",   id:"fs",  val:fStatus, set:setFStatus, opts:statuses },
+                { label:"Agent",    id:"fa",  val:fAgent,  set:setFAgent,  opts:agents },
               ].map(f => (
                 <div key={f.id} className="flex flex-col gap-1">
                   <label htmlFor={f.id} className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{f.label}</label>
                   <select id={f.id} value={f.val} onChange={e=>f.set(e.target.value)}
-                    className="rounded-md border bg-card px-3 py-1.5 text-sm min-w-[140px] focus:ring-1 focus:ring-ring">
-                    <option value="">All {f.label.toLowerCase()}s</option>
+                    className="rounded-md border bg-card px-3 py-1.5 text-sm min-w-[130px] focus:ring-1 focus:ring-ring">
+                    <option value="">All</option>
                     {f.opts.map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </div>
@@ -526,7 +575,7 @@ export default function QueueAnalyzerPage() {
                 <input id="ft" type="date" value={fTo} onChange={e=>setFTo(e.target.value)}
                   className="rounded-md border bg-card px-3 py-1.5 text-sm focus:ring-1 focus:ring-ring"/>
               </div>
-              <button onClick={()=>{setFQueue('');setFStatus('');setFAgent('');
+              <button onClick={()=>{setFQueue('');setFStatus('');setFAgent('');setFSheet('');
                 if(allDates.length){setFFrom(isoDate(allDates[0]));setFTo(isoDate(allDates[allDates.length-1]));} }}
                 className="rounded-md border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent self-end transition-colors">
                 Clear
@@ -546,6 +595,19 @@ export default function QueueAnalyzerPage() {
             {tab==="overview" && (
               <div className="space-y-4">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <ChartPanel title="Volume by KPI Sheet">
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart data={sheetData} layout="vertical" margin={{left:8,right:16,top:4,bottom:4}}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))"/>
+                        <XAxis type="number" tick={{fontSize:11}} stroke="hsl(var(--muted-foreground))"/>
+                        <YAxis type="category" dataKey="name" width={80} tick={{fontSize:11}} stroke="hsl(var(--muted-foreground))"/>
+                        <Tooltip content={<ChartTip/>}/>
+                        <Bar dataKey="value" name="Tickets" radius={[0,4,4,0]}>
+                          {sheetData.map((_,i) => <Cell key={i} fill={COLORS[i%COLORS.length]}/>)}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </ChartPanel>
                   <ChartPanel title="Volume by Status">
                     <ResponsiveContainer width="100%" height={260}>
                       <PieChart><Pie data={statusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label={({name,percent})=>`${name} ${(percent*100).toFixed(0)}%`} labelLine={false}>
@@ -553,18 +615,18 @@ export default function QueueAnalyzerPage() {
                       </Pie><Tooltip content={<ChartTip/>}/></PieChart>
                     </ResponsiveContainer>
                   </ChartPanel>
-                  <ChartPanel title="Volume by Queue">
-                    <ResponsiveContainer width="100%" height={260}>
-                      <BarChart data={queueData} layout="vertical" margin={{left:8,right:16,top:4,bottom:4}}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))"/>
-                        <XAxis type="number" tick={{fontSize:11}} stroke="hsl(var(--muted-foreground))"/>
-                        <YAxis type="category" dataKey="name" width={110} tick={{fontSize:11}} stroke="hsl(var(--muted-foreground))"/>
-                        <Tooltip content={<ChartTip/>}/>
-                        <Bar dataKey="value" name="Tickets" fill={COLORS[0]} radius={[0,4,4,0]}/>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </ChartPanel>
                 </div>
+                <ChartPanel title="Volume by Queue">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={queueData} layout="vertical" margin={{left:8,right:16,top:4,bottom:4}}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))"/>
+                      <XAxis type="number" tick={{fontSize:11}} stroke="hsl(var(--muted-foreground))"/>
+                      <YAxis type="category" dataKey="name" width={110} tick={{fontSize:11}} stroke="hsl(var(--muted-foreground))"/>
+                      <Tooltip content={<ChartTip/>}/>
+                      <Bar dataKey="value" name="Tickets" fill={COLORS[0]} radius={[0,4,4,0]}/>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartPanel>
                 <ChartPanel title="Daily Ticket Volume">
                   <ResponsiveContainer width="100%" height={260}>
                     <LineChart data={dailyData} margin={{left:0,right:16,top:4,bottom:4}}>
@@ -657,7 +719,7 @@ export default function QueueAnalyzerPage() {
                         <XAxis dataKey="queue" tick={{fontSize:10}} stroke="hsl(var(--muted-foreground))" angle={-30} textAnchor="end" interval={0}/>
                         <YAxis tick={{fontSize:11}} stroke="hsl(var(--muted-foreground))"/>
                         <Tooltip content={<ChartTip/>}/>
-                        <Legend wrapperStyle={{fontSize:11}} formatter={(v:string)=>v}/>
+                        <Legend wrapperStyle={{fontSize:11}}/>
                         <Bar dataKey="resolved" name="Resolved" stackId="a" fill={COLORS[4]}/>
                         <Bar dataKey="open"     name="Open"     stackId="a" fill={COLORS[1]} radius={[4,4,0,0]}/>
                       </BarChart>
@@ -801,14 +863,11 @@ export default function QueueAnalyzerPage() {
 function ChartPanel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
-      <div className="px-5 py-3 border-b">
-        <h2 className="font-semibold text-sm">{title}</h2>
-      </div>
+      <div className="px-5 py-3 border-b"><h2 className="font-semibold text-sm">{title}</h2></div>
       <div className="p-4">{children}</div>
     </div>
   );
 }
-
 function UploadIcon() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
 }
