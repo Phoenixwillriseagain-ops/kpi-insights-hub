@@ -6,7 +6,7 @@ import {
   Sparkles, Sun, Target, TrendingUp, Upload, Users, X,
 } from "lucide-react";
 import {
-  Bar, BarChart, CartesianGrid, Cell, ComposedChart, LabelList, Legend, Line, LineChart,
+  Bar, BarChart, CartesianGrid, ComposedChart, LabelList, Legend, Line, LineChart,
   ReferenceLine, Tooltip, XAxis, YAxis,
 } from "recharts";
 
@@ -42,8 +42,7 @@ export const Route = createFileRoute("/")(
     ],
   }),
   component: Dashboard,
-}
-);
+});
 
 type Slot = "sla" | "breach" | "excl";
 
@@ -964,38 +963,78 @@ const MonthlySection = React.memo(function MonthlySection({ ds, detected }: { ds
   );
 });
 
-/* ____ WEEKLY */
+/* \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 WEEKLY */
 
 const WeeklySection = React.memo(function WeeklySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) {
   return (
     <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
       {detected.map((code) => {
         const meta = KPI_META[code];
-        const data = weeklySummary(ds, code, { lastN: 12 }).map((p) => ({ ...p, label: weekLabel(p.label) }));
+        const raw = weeklySummary(ds, code).map((p) => ({ ...p, label: weekLabel(p.label) }));
+        const data = withDeltas(raw);
         const amber = amberBound(meta);
+        const dotColor = (rag: string) =>
+          rag === "green" ? "var(--success)"
+          : rag === "amber" ? "var(--warning)"
+          : rag === "red" ? "var(--danger)"
+          : "var(--muted-foreground)";
+        const values = data.map((d) => d.rate).filter((v) => Number.isFinite(v));
+        const minY = values.length ? Math.floor(Math.min(...values, meta.target) - 1.5) : "auto";
+        const maxY = values.length ? Math.ceil(Math.max(...values, meta.target) + 1.5) : "auto";
         return (
-          <Panel key={code} title={code} subtitle={meta.what} badge={meta.targetLabel}>
+          <Panel key={code} title={`${code} · last 6 weeks`} subtitle={meta.what} badge={meta.targetLabel} >
             {data.length === 0
               ? <Empty message="No weekly data for this KPI." />
               : (
-                <ChartFrame height={200}>{(width) => (
-                  <ComposedChart width={width} height={200} data={data} margin={{ top: 14, right: 24, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
-                    <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} />
-                    <Tooltip content={<RichTip meta={meta} />} cursor={{ stroke: "var(--border)", strokeDasharray: "3 3" }} />
-                    <ReferenceLine y={meta.target} stroke="var(--success)" strokeDasharray="5 4" ifOverflow="extendDomain" />
-                    <ReferenceLine y={amber} stroke="var(--warning)" strokeDasharray="2 4" ifOverflow="extendDomain" />
-                    <Bar dataKey="total" fill="var(--muted-foreground)" opacity={0.12} radius={[2, 2, 0, 0]} yAxisId={0} />
-                    <Line type="monotone" dataKey="rate" stroke={meta.color} strokeWidth={2} isAnimationActive={false}
-                      dot={(props: any) => {
-                        const { cx, cy, payload, index } = props;
-                        const c = payload.rag === "green" ? "var(--success)" : payload.rag === "amber" ? "var(--warning)" : payload.rag === "red" ? "var(--danger)" : "var(--muted-foreground)";
-                        return <circle key={index} cx={cx} cy={cy} r={3} fill={c} stroke={meta.color} strokeWidth={1.5} />;
-                      }}
-                    />
-                  </ComposedChart>
-                )}</ChartFrame>
+                <>
+                  <ChartFrame height={260}>{(width) => (
+                    <LineChart width={width} height={260} data={data} margin={{ top: 26, right: 28, left: 4, bottom: 6 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                      <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+                        tickFormatter={(v) => `${Math.round(v)}%`}
+                        domain={[minY as number | "auto", maxY as number | "auto"]}
+                      />
+                      <Tooltip content={<RichTip meta={meta} />} cursor={{ stroke: "var(--border)", strokeDasharray: "3 3" }} />
+                      <ReferenceLine
+                        y={meta.target}
+                        stroke="var(--success)"
+                        strokeDasharray="5 4"
+                        ifOverflow="extendDomain"
+                        label={{ value: `target ${meta.targetLabel}`, fontSize: 10, fill: "var(--success)", position: "insideTopRight" }}
+                      />
+                      <ReferenceLine
+                        y={amber}
+                        stroke="var(--warning)"
+                        strokeDasharray="2 4"
+                        ifOverflow="extendDomain"
+                        label={{ value: meta.isKM ? "watch ceiling" : "watch floor", fontSize: 10, fill: "var(--warning)", position: "insideBottomRight" }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="rate"
+                        stroke={meta.color}
+                        strokeWidth={2.5}
+                        isAnimationActive={false}
+                        dot={(props: any) => {
+                          const { cx, cy, payload, index } = props;
+                          return <circle key={index} cx={cx} cy={cy} r={5} fill={dotColor(payload.rag)} stroke={meta.color} strokeWidth={1.5} />;
+                        }}
+                        activeDot={{ r: 7 }}
+                      >
+                        <LabelList
+                          dataKey="rate"
+                          position="top"
+                          offset={10}
+                          formatter={(v: number) => (Number.isFinite(v) ? `${v.toFixed(1)}%` : "")}
+                          style={{ fontSize: 11, fontWeight: 600, fill: "var(--foreground)" }}
+                        />
+                      </Line>
+                    </LineChart>
+                  )}</ChartFrame>
+                  <WeeklyTable rows={data} isKM={meta.isKM} />
+                </>
               )}
           </Panel>
         );
@@ -1004,10 +1043,56 @@ const WeeklySection = React.memo(function WeeklySection({ ds, detected }: { ds: 
   );
 });
 
-/* ________QUEUES */
+type WeeklyTableRow = { label: string; total: number; breaches: number; rate: number; rag: "green" | "amber" | "red" | "none"; delta: number | null; prev: number | null };
+function WeeklyTable({ rows, isKM }: { rows: WeeklyTableRow[]; isKM: boolean }) {
+  return (
+    <div className="mt-4 overflow-x-auto rounded-xl border border-border/50">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="h-8 text-[11px]">Week</TableHead>
+            <TableHead className="h-8 text-right text-[11px]">Tickets</TableHead>
+            <TableHead className="h-8 text-right text-[11px]">Breaches</TableHead>
+            <TableHead className="h-8 text-right text-[11px]">Rate</TableHead>
+            <TableHead className="h-8 text-right text-[11px]">\u0394 vs prev</TableHead>
+            <TableHead className="h-8 text-right text-[11px]">Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r) => {
+            const goodDelta = r.delta == null ? null : (isKM ? r.delta < 0 : r.delta > 0);
+            const deltaColor = r.delta == null ? "var(--muted-foreground)"
+              : goodDelta ? "var(--success)"
+              : r.delta === 0 ? "var(--muted-foreground)" : "var(--danger)";
+            const rateColor = r.rag === "green" ? "var(--success)" : r.rag === "amber" ? "var(--warning)" : r.rag === "red" ? "var(--danger)" : undefined;
+            return (
+              <TableRow key={r.label}>
+                <TableCell className="py-1.5 text-xs font-medium">{r.label}</TableCell>
+                <TableCell className="py-1.5 text-right text-xs tabular-nums">{r.total.toLocaleString()}</TableCell>
+                <TableCell className="py-1.5 text-right text-xs tabular-nums">{r.breaches.toLocaleString()}</TableCell>
+                <TableCell className="py-1.5 text-right text-xs font-semibold tabular-nums" style={{ color: rateColor }}>{r.rate.toFixed(1)}%</TableCell>
+                <TableCell className="py-1.5 text-right text-xs tabular-nums" style={{ color: deltaColor }}>
+                  {r.delta == null ? "\u2014" : `${r.delta > 0 ? "+" : ""}${r.delta.toFixed(1)}pp`}
+                </TableCell>
+                <TableCell className="py-1.5 text-right">
+                  <span className="inline-block h-2 w-2 rounded-full align-middle" style={{ background: rateColor ?? "var(--muted-foreground)" }} aria-label={r.rag} />
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+/* \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 QUEUES */
 
 const QueuesSection = React.memo(function QueuesSection({
-  ds, month, detected, activeKpi, setActiveKpi,
+  ds,
+  month,
+  detected,
+  activeKpi,
+  setActiveKpi,
 }: {
   ds: Dataset;
   month: string | null;
@@ -1015,52 +1100,48 @@ const QueuesSection = React.memo(function QueuesSection({
   activeKpi: KpiCode;
   setActiveKpi: (k: KpiCode) => void;
 }) {
-const safeKpi: KpiCode = detected.includes(activeKpi) ? activeKpi : (detected[0] ?? "KSL-2c");
-const meta = KPI_META[safeKpi];
+  const safe = detected.includes(activeKpi) ? activeKpi : (detected[0] ?? "KSL-2c");
+  const meta = KPI_META[safe];
 
-// 1️⃣ rows first — no dependencies on the others
-const rows = useMemo(() => queueBreakdown(ds, safeKpi, month), [ds, safeKpi, month]);
+  const rows = useMemo(() => queueBreakdown(ds, safe, month), [ds, safe, month]);
 
-// 2️⃣ topQueues second — depends on rows
-const topQueues = useMemo(() => {
-  const sorted = [...rows].sort((a, b) => b.breaches - a.breaches);
-  return sorted.slice(0, 5).map((r) => r.queue);
-}, [rows]);
+  const topQueues = useMemo(() => {
+    const sorted = [...rows].sort((a, b) => b.breaches - a.breaches);
+    return sorted.slice(0, 5).map((r) => r.queue);
+  }, [rows]);
 
-// 3️⃣ weekRows third — depends on topQueues (must come AFTER)
-const weekRows = useMemo(() => {
-  const allWeeks = new Set<string>();
-  const queueData: Record<string, Record<string, number>> = {};
+  const weekRows = useMemo(() => {
+    const allWeeks = new Set<string>();
+    const queueData: Record<string, Record<string, number>> = {};
 
-  topQueues.forEach((q) => {
-    const pts = weeklyQueueSummary(ds, safeKpi, q, { lastN: 12 });
-    queueData[q] = {};
-    pts.forEach((p) => {
-      allWeeks.add(p.label);
-      queueData[q][p.label] = p.rate;
-    });
-  });
-
-  return [...allWeeks].sort().map((week) => ({
-    week,
-    queues: topQueues.map((q) => ({
-      queue: q,
-      rate: queueData[q][week] ?? null,
-    })),
-  }));
-}, [ds, safeKpi, topQueues]);
-
-// 4️⃣ chartData last — depends on weekRows + topQueues
-const chartData = useMemo(() => {
-  return weekRows.map((w) => {
-    const entry: Record<string, unknown> = { label: weekLabel(w.week) };
     topQueues.forEach((q) => {
-      const found = w.queues.find((x) => x.queue === q);
-      entry[q] = found?.rate ?? null;
+      const pts = weeklyQueueSummary(ds, safe, q, { lastN: 12 });
+      queueData[q] = {};
+      pts.forEach((p) => {
+        allWeeks.add(p.label);
+        queueData[q][p.label] = p.rate;
+      });
     });
-    return entry;
-  });
-}, [weekRows, topQueues]);
+
+    return [...allWeeks].sort().map((week) => ({
+      week,
+      queues: topQueues.map((q) => ({
+        queue: q,
+        rate: queueData[q][week] ?? null,
+      })),
+    }));
+  }, [ds, safe, topQueues]);
+
+  const chartData = useMemo(() => {
+    return weekRows.map((w) => {
+      const entry: Record<string, unknown> = { label: weekLabel(w.week) };
+      topQueues.forEach((q) => {
+        const found = w.queues.find((x) => x.queue === q);
+        entry[q] = found?.rate ?? null;
+      });
+      return entry;
+    });
+  }, [weekRows, topQueues]);
 
   const QUEUE_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
 
@@ -1068,7 +1149,7 @@ const chartData = useMemo(() => {
     <>
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">KPI</span>
-        <Select value={safeKpi} onValueChange={(v) => setActiveKpi(v as KpiCode)}>
+        <Select value={safe} onValueChange={(v) => setActiveKpi(v as KpiCode)}>
           <SelectTrigger className="h-8 w-40 text-xs">
             <SelectValue />
           </SelectTrigger>
@@ -1151,7 +1232,7 @@ const chartData = useMemo(() => {
   );
 });
 
-/* \_________________________________EXCLUSION */
+/* \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 EXCLUSION */
 
 const ExclusionSection = React.memo(function ExclusionSection({ ds, month, detected }: { ds: Dataset; month: string | null; detected: KpiCode[] }) {
   return (
@@ -1188,9 +1269,8 @@ const ExclusionSection = React.memo(function ExclusionSection({ ds, month, detec
                       <ReferenceLine y={meta.target} stroke="var(--success)" strokeDasharray="5 4" ifOverflow="extendDomain" />
                       <Bar dataKey="rate" radius={[4, 4, 0, 0]} isAnimationActive={false}>
                         {data.map((entry, index) => (
-                          <Cell key={index} fill={barColor(entry.rag)} />
+                          <LabelList key={index} dataKey="rate" position="top" formatter={(v: any) => v != null ? `${Number(v).toFixed(1)}%` : ""} style={{ fontSize: 11, fill: "var(--foreground)" }} />
                         ))}
-                        <LabelList dataKey="rate" position="top" formatter={(v: any) => v != null ? `${Number(v).toFixed(1)}%` : ""} style={{ fontSize: 11, fill: "var(--foreground)" }} />
                       </Bar>
                     </BarChart>
                   )}</ChartFrame>
@@ -1421,103 +1501,10 @@ function amberBound(meta: (typeof KPI_META)[KpiCode]): number {
     : meta.target * 0.97;
 }
 
-function withDeltas<T extends { rate: number }>(data: T[]): (T & { delta?: number })[] {
+function withDeltas<T extends { rate: number }>(data: T[]): (T & { delta?: number; prev?: number })[] {
   return data.map((d, i) => ({
     ...d,
+    prev: i === 0 ? undefined : data[i - 1].rate,
     delta: i === 0 ? undefined : d.rate - data[i - 1].rate,
   }));
-}
-
-/* \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 KSL-5b PCMS CHART */
-
-function PcmsWeeklyChart({ counts }: { counts: ReturnType<typeof pcmsWeeklyCounts> }) {
-  const cats = Array.from(new Set(counts.flatMap((w) => w.categories.map((c) => c.category)))).slice(0, 6);
-  const data = counts.map((w) => {
-    const e: Record<string, unknown> = { label: weekLabel(w.week) };
-    cats.forEach((cat) => {
-      const found = w.categories.find((c) => c.category === cat);
-      e[cat] = found?.count ?? 0;
-    });
-    return e;
-  });
-  const COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "var(--chart-6)"];
-  return (
-    <ChartFrame height={260}>{(width) => (
-      <BarChart width={width} height={260} data={data} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-        <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
-        <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
-        <Tooltip />
-        <Legend wrapperStyle={{ fontSize: 11 }} />
-        {cats.map((cat, i) => (
-          <Bar key={cat} dataKey={cat} stackId="a" fill={COLORS[i % COLORS.length]} isAnimationActive={false}
-            radius={i === cats.length - 1 ? [2, 2, 0, 0] : undefined}
-          />
-        ))}
-      </BarChart>
-    )}</ChartFrame>
-  );
-}
-
-function PcmsAgentChart({ agents }: { agents: ReturnType<typeof pcmsTopAgents> }) {
-  return (
-    <ChartFrame height={220}>{(width) => (
-      <BarChart
-        width={width} height={220}
-        data={agents.map((a) => ({ name: a.agent, KO: a.koCount, NOK: a.nokCount }))}
-        margin={{ top: 10, right: 24, left: 0, bottom: 40 }}
-      >
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-        <XAxis dataKey="name" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} angle={-30} textAnchor="end" interval={0} />
-        <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
-        <Tooltip />
-        <Legend wrapperStyle={{ fontSize: 11 }} />
-        <Bar dataKey="KO"  fill="var(--danger)"  radius={[2, 2, 0, 0]} isAnimationActive={false} />
-        <Bar dataKey="NOK" fill="var(--warning)" radius={[2, 2, 0, 0]} isAnimationActive={false} />
-      </BarChart>
-    )}</ChartFrame>
-  );
-}
-
-function AgentTable({ agents }: { agents: ReturnType<typeof pcmsTopAgents> }) {
-  return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>#</TableHead>
-            <TableHead>Agent</TableHead>
-            <TableHead className="text-right">KO Tickets</TableHead>
-            <TableHead className="text-right">NOK Tickets</TableHead>
-            <TableHead className="text-right">Total</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {agents.map((a, i) => (
-            <TableRow key={a.agent}>
-              <TableCell className="text-muted-foreground">{i + 1}</TableCell>
-              <TableCell className="font-medium">{a.agent}</TableCell>
-              <TableCell className="text-right tabular-nums">{a.koCount.toLocaleString()}</TableCell>
-              <TableCell className="text-right tabular-nums">{a.nokCount.toLocaleString()}</TableCell>
-              <TableCell className="text-right tabular-nums font-semibold">{(a.koCount + a.nokCount).toLocaleString()}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
-function CategoryBreakdownList({ counts }: { counts: Array<{ category: string; count: number }> }) {
-  return (
-    <div className="space-y-1">
-      {counts.map(({ category: cat, count }) => (
-        <p key={cat} className="flex items-center gap-1.5 text-xs">
-          <span className="h-2 w-2 rounded-full bg-muted-foreground" />
-          <span className="font-medium">{cat}</span>
-          <span className="ml-auto tabular-nums text-muted-foreground">{count.toLocaleString()}</span>
-        </p>
-      ))}
-    </div>
-  );
 }
