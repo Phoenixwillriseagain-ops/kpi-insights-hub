@@ -32,7 +32,8 @@ import { PerfPanel } from "@/components/PerfPanel";
 import { perfMark, perfMeasure } from "@/lib/perf";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/")(
+  {
   ssr: false,
   head: () => ({
     meta: [
@@ -41,7 +42,8 @@ export const Route = createFileRoute("/")({
     ],
   }),
   component: Dashboard,
-});
+}
+);
 
 type Slot = "sla" | "breach" | "excl";
 
@@ -948,4 +950,550 @@ const MonthlySection = React.memo(function MonthlySection({ ds, detected }: { ds
                       dot={(props: any) => {
                         const { cx, cy, payload, index } = props;
                         const c = payload.rag === "green" ? "var(--success)" : payload.rag === "amber" ? "var(--warning)" : payload.rag === "red" ? "var(--danger)" : "var(--muted-foreground)";
-                        return <circle key={index} cx={cx} cy={cy} r={4} fill={c} stroke={meta.co
+                        return <circle key={index} cx={cx} cy={cy} r={4} fill={c} stroke={meta.color} strokeWidth={1.5} />;
+                      }}
+                      activeDot={{ r: 6 }}
+                    />
+                  </LineChart>
+                )}</ChartFrame>
+              )}
+          </Panel>
+        );
+      })}
+    </div>
+  );
+});
+
+/* \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 WEEKLY */
+
+const WeeklySection = React.memo(function WeeklySection({ ds, detected }: { ds: Dataset; detected: KpiCode[] }) {
+  return (
+    <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+      {detected.map((code) => {
+        const meta = KPI_META[code];
+        const data = weeklySummary(ds, code, { lastN: 12 }).map((p) => ({ ...p, label: weekLabel(p.label) }));
+        const amber = amberBound(meta);
+        return (
+          <Panel key={code} title={code} subtitle={meta.what} badge={meta.targetLabel}>
+            {data.length === 0
+              ? <Empty message="No weekly data for this KPI." />
+              : (
+                <ChartFrame height={200}>{(width) => (
+                  <ComposedChart width={width} height={200} data={data} margin={{ top: 14, right: 24, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
+                    <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} />
+                    <Tooltip content={<RichTip meta={meta} />} cursor={{ stroke: "var(--border)", strokeDasharray: "3 3" }} />
+                    <ReferenceLine y={meta.target} stroke="var(--success)" strokeDasharray="5 4" ifOverflow="extendDomain" />
+                    <ReferenceLine y={amber} stroke="var(--warning)" strokeDasharray="2 4" ifOverflow="extendDomain" />
+                    <Bar dataKey="total" fill="var(--muted-foreground)" opacity={0.12} radius={[2, 2, 0, 0]} yAxisId={0} />
+                    <Line type="monotone" dataKey="rate" stroke={meta.color} strokeWidth={2} isAnimationActive={false}
+                      dot={(props: any) => {
+                        const { cx, cy, payload, index } = props;
+                        const c = payload.rag === "green" ? "var(--success)" : payload.rag === "amber" ? "var(--warning)" : payload.rag === "red" ? "var(--danger)" : "var(--muted-foreground)";
+                        return <circle key={index} cx={cx} cy={cy} r={3} fill={c} stroke={meta.color} strokeWidth={1.5} />;
+                      }}
+                    />
+                  </ComposedChart>
+                )}</ChartFrame>
+              )}
+          </Panel>
+        );
+      })}
+    </div>
+  );
+});
+
+/* \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 QUEUES */
+
+const QueuesSection = React.memo(function QueuesSection({
+  ds, month, detected, activeKpi, setActiveKpi,
+}: {
+  ds: Dataset;
+  month: string | null;
+  detected: KpiCode[];
+  activeKpi: KpiCode;
+  setActiveKpi: (k: KpiCode) => void;
+}) {
+  const safeKpi: KpiCode = detected.includes(activeKpi) ? activeKpi : (detected[0] ?? "KSL-2c");
+  const meta = KPI_META[safeKpi];
+  const rows = useMemo(() => queueBreakdown(ds, safeKpi, month), [ds, safeKpi, month]);
+  const weekRows = useMemo(() => weeklyQueueSummary(ds, safeKpi), [ds, safeKpi]);
+
+  const topQueues = useMemo(() => {
+    const sorted = [...rows].sort((a, b) => b.breaches - a.breaches);
+    return sorted.slice(0, 5).map((r) => r.queue);
+  }, [rows]);
+
+  const chartData = useMemo(() => {
+    return weekRows.map((w) => {
+      const entry: Record<string, unknown> = { label: weekLabel(w.week) };
+      topQueues.forEach((q) => {
+        const found = w.queues.find((x) => x.queue === q);
+        entry[q] = found?.rate ?? null;
+      });
+      return entry;
+    });
+  }, [weekRows, topQueues]);
+
+  const QUEUE_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
+
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">KPI</span>
+        <Select value={safeKpi} onValueChange={(v) => setActiveKpi(v as KpiCode)}>
+          <SelectTrigger className="h-8 w-40 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {detected.map((c) => (
+              <SelectItem key={c} value={c} className="text-xs">{c} \u00b7 {KPI_META[c].what}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {rows.length === 0 ? (
+        <Empty message="No queue breakdown available for this KPI / period." />
+      ) : (
+        <>
+          <Panel title="Queue Breach Table" subtitle={`${meta.what} \u00b7 ${month ? monthLabel(month) : "all months"}`} badge={meta.targetLabel}>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Queue</TableHead>
+                    <TableHead className="text-right">Tickets</TableHead>
+                    <TableHead className="text-right">Breaches</TableHead>
+                    <TableHead className="text-right">Rate</TableHead>
+                    <TableHead className="text-right">vs target</TableHead>
+                    <TableHead>RAG</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((r) => {
+                    const diff = r.rate - meta.target;
+                    const diffLabel = (meta.isKM ? -diff : diff) > 0
+                      ? <span className="text-[color:var(--success)]">+{Math.abs(diff).toFixed(1)}pp</span>
+                      : <span className="text-[color:var(--danger)]">\u2212{Math.abs(diff).toFixed(1)}pp</span>;
+                    return (
+                      <TableRow key={r.queue}>
+                        <TableCell className="font-medium">{r.queue}</TableCell>
+                        <TableCell className="text-right tabular-nums">{r.total.toLocaleString()}</TableCell>
+                        <TableCell className="text-right tabular-nums">{r.breaches.toLocaleString()}</TableCell>
+                        <TableCell className="text-right tabular-nums font-semibold">{r.rate.toFixed(1)}%</TableCell>
+                        <TableCell className="text-right tabular-nums">{diffLabel}</TableCell>
+                        <TableCell><RagBadge rag={r.rag} isKM={meta.isKM} /></TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </Panel>
+
+          {chartData.length > 0 && topQueues.length > 0 && (
+            <Panel title="Weekly Rate by Queue" subtitle={`Top ${topQueues.length} queues by breach volume`}>
+              <ChartFrame height={260}>{(width) => (
+                <LineChart width={width} height={260} data={chartData} margin={{ top: 14, right: 24, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
+                  <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} />
+                  <Tooltip formatter={(v: any) => [`${Number(v).toFixed(1)}%`]} cursor={{ stroke: "var(--border)", strokeDasharray: "3 3" }} />
+                  <ReferenceLine y={meta.target} stroke="var(--success)" strokeDasharray="5 4" ifOverflow="extendDomain" />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  {topQueues.map((q, i) => (
+                    <Line
+                      key={q}
+                      type="monotone"
+                      dataKey={q}
+                      stroke={QUEUE_COLORS[i % QUEUE_COLORS.length]}
+                      strokeWidth={2}
+                      dot={false}
+                      connectNulls
+                      isAnimationActive={false}
+                    />
+                  ))}
+                </LineChart>
+              )}</ChartFrame>
+            </Panel>
+          )}
+        </>
+      )}
+    </>
+  );
+});
+
+/* \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 EXCLUSION */
+
+const ExclusionSection = React.memo(function ExclusionSection({ ds, month, detected }: { ds: Dataset; month: string | null; detected: KpiCode[] }) {
+  return (
+    <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+      {detected.map((code) => {
+        const meta = KPI_META[code];
+        const imp = exclusionImpact(ds, code, month);
+        const delta = imp.adjustedRate - imp.rawRate;
+        const data = [
+          { name: "Raw (before)", rate: imp.rawRate, breaches: imp.rawBreaches, total: imp.rawTotal, rag: imp.rawRag },
+          { name: "Adjusted (after)", rate: imp.adjustedRate, breaches: imp.adjustedBreaches, total: imp.adjustedTotal, rag: imp.adjustedRag },
+        ];
+        return (
+          <Panel key={code} title={code} subtitle={meta.what} badge={meta.targetLabel}>
+            {imp.rawTotal === 0
+              ? <Empty message="No data for this KPI / period." />
+              : (
+                <>
+                  <div className="mb-3 flex items-center gap-3 text-xs text-muted-foreground">
+                    <span>{imp.excluded.toLocaleString()} tickets excluded</span>
+                    <span>\u00b7</span>
+                    <span className={delta >= 0 ? "text-[color:var(--success)]" : "text-[color:var(--danger)]"}>
+                      {delta >= 0 ? "+" : ""}{delta.toFixed(1)}pp impact
+                    </span>
+                  </div>
+                  <ChartFrame height={160}>{(width) => (
+                    <BarChart width={width} height={160} data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+                      <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} />
+                      <Tooltip formatter={(v: any) => [`${Number(v).toFixed(1)}%`]} />
+                      <ReferenceLine y={meta.target} stroke="var(--success)" strokeDasharray="5 4" ifOverflow="extendDomain" />
+                      <Bar dataKey="rate" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                        {data.map((entry, index) => (
+                          <rect
+                            key={index}
+                            fill={entry.rag === "green" ? "var(--success)" : entry.rag === "amber" ? "var(--warning)" : "var(--danger)"}
+                          />
+                        ))}
+                        <LabelList dataKey="rate" position="top" formatter={(v: number) => `${v.toFixed(1)}%`} style={{ fontSize: 11, fill: "var(--foreground)" }} />
+                      </Bar>
+                    </BarChart>
+                  )}</ChartFrame>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-[10px]">
+                    {data.map((d) => (
+                      <div key={d.name} className="rounded-lg bg-secondary/40 p-2">
+                        <p className="font-semibold text-muted-foreground">{d.name}</p>
+                        <p className="tabular-nums">{d.rate.toFixed(1)}% \u00b7 {d.breaches.toLocaleString()} breaches</p>
+                        <p className="text-muted-foreground">{d.total.toLocaleString()} tickets</p>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+          </Panel>
+        );
+      })}
+    </div>
+  );
+});
+
+/* \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 QUALITY / REOPEN */
+
+const QualityReopenSection = React.memo(function QualityReopenSection({ ds, month, detected }: { ds: Dataset; month: string | null; detected: KpiCode[] }) {
+  const qualityCodes = detected.filter((c) => ["KSL-4", "KM-1"].includes(c));
+  if (qualityCodes.length === 0) {
+    return <Empty message="No KSL-4 or KM-1 data detected in the uploaded workbook." />;
+  }
+  return (
+    <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+      {qualityCodes.map((code) => {
+        const meta = KPI_META[code];
+        const data = withDeltas(monthlySummary(ds, code).map((p) => ({ ...p, label: monthLabel(p.label) })));
+        const amber = amberBound(meta);
+        return (
+          <Panel key={code} title={code} subtitle={meta.what} badge={meta.targetLabel}>
+            {data.length === 0
+              ? <Empty message={`No data for ${code}.`} />
+              : (
+                <ChartFrame height={240}>{(width) => (
+                  <ComposedChart width={width} height={240} data={data} margin={{ top: 18, right: 24, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
+                    <YAxis tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} tickFormatter={(v) => `${Math.round(v)}%`} />
+                    <Tooltip content={<RichTip meta={meta} />} cursor={{ stroke: "var(--border)", strokeDasharray: "3 3" }} />
+                    <ReferenceLine y={meta.target} stroke="var(--success)" strokeDasharray="5 4" ifOverflow="extendDomain"
+                      label={{ value: `target ${meta.targetLabel}`, fontSize: 10, fill: "var(--success)", position: "insideTopRight" }} />
+                    <ReferenceLine y={amber} stroke="var(--warning)" strokeDasharray="2 4" ifOverflow="extendDomain"
+                      label={{ value: meta.isKM ? "watch ceiling" : "watch floor", fontSize: 10, fill: "var(--warning)", position: "insideBottomRight" }} />
+                    <Bar dataKey="total" fill="var(--muted-foreground)" opacity={0.12} radius={[2, 2, 0, 0]} isAnimationActive={false} />
+                    <Line type="monotone" dataKey="rate" stroke={meta.color} strokeWidth={2.5} isAnimationActive={false}
+                      dot={(props: any) => {
+                        const { cx, cy, payload, index } = props;
+                        const c = payload.rag === "green" ? "var(--success)" : payload.rag === "amber" ? "var(--warning)" : payload.rag === "red" ? "var(--danger)" : "var(--muted-foreground)";
+                        return <circle key={index} cx={cx} cy={cy} r={4} fill={c} stroke={meta.color} strokeWidth={1.5} />;
+                      }}
+                      activeDot={{ r: 6 }}
+                    />
+                  </ComposedChart>
+                )}</ChartFrame>
+              )}
+          </Panel>
+        );
+      })}
+    </div>
+  );
+});
+
+/* \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 KSL-5b */
+
+const Ksl5bDetail = React.memo(function Ksl5bDetail({ ds, month }: { ds: Dataset; month: string | null }) {
+  const counts = useMemo(() => pcmsWeeklyCounts(ds, month), [ds, month]);
+  const topAgents = useMemo(() => pcmsTopAgents(ds, month, 10), [ds, month]);
+
+  if (counts.length === 0 && topAgents.length === 0) {
+    return <Empty message="No KSL-5b / PCms data found. Upload the PCms workbook in the Breach slot." />;
+  }
+
+  return (
+    <div className="space-y-6">
+      {counts.length > 0 && (
+        <Panel title="Weekly KO/NOK Reason Counts" subtitle="From PCms deep-dive file">
+          <ChartFrame height={260}>{(width) => {
+            const cats = Array.from(new Set(counts.flatMap((w) => w.categories.map((c) => c.category)))).slice(0, 6);
+            const data = counts.map((w) => {
+              const e: Record<string, unknown> = { label: weekLabel(w.week) };
+              cats.forEach((cat) => {
+                const found = w.categories.find((c) => c.category === cat);
+                e[cat] = found?.count ?? 0;
+              });
+              return e;
+            });
+            const COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "var(--chart-6)"];
+            return (
+              <BarChart width={width} height={260} data={data} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
+                <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
+                <Tooltip />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                {cats.map((cat, i) => (
+                  <Bar key={cat} dataKey={cat} stackId="a" fill={COLORS[i % COLORS.length]} isAnimationActive={false} radius={i === cats.length - 1 ? [2, 2, 0, 0] : undefined} />
+                ))}
+              </BarChart>
+            );
+          }}</ChartFrame>
+        </Panel>
+      )}
+
+      {topAgents.length > 0 && (
+        <Panel title="Top 10 Agents by KO Tickets" subtitle="From PCms deep-dive file">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>#</TableHead>
+                  <TableHead>Agent</TableHead>
+                  <TableHead className="text-right">KO Tickets</TableHead>
+                  <TableHead className="text-right">NOK Tickets</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {topAgents.map((a, i) => (
+                  <TableRow key={a.agent}>
+                    <TableCell className="text-muted-foreground">{i + 1}</TableCell>
+                    <TableCell className="font-medium">{a.agent}</TableCell>
+                    <TableCell className="text-right tabular-nums">{a.koCount.toLocaleString()}</TableCell>
+                    <TableCell className="text-right tabular-nums">{a.nokCount.toLocaleString()}</TableCell>
+                    <TableCell className="text-right tabular-nums font-semibold">{(a.koCount + a.nokCount).toLocaleString()}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </Panel>
+      )}
+
+      {topAgents.length > 0 && (
+        <Panel title="KO vs NOK Distribution" subtitle="Top 10 agents">
+          <ChartFrame height={220}>{(width) => (
+            <BarChart width={width} height={220} data={topAgents.map((a) => ({ name: a.agent, KO: a.koCount, NOK: a.nokCount }))} margin={{ top: 10, right: 24, left: 0, bottom: 40 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="name" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} angle={-30} textAnchor="end" interval={0} />
+              <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
+              <Tooltip />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              <Bar dataKey="KO" fill="var(--danger)" radius={[2, 2, 0, 0]} isAnimationActive={false} />
+              <Bar dataKey="NOK" fill="var(--warning)" radius={[2, 2, 0, 0]} isAnimationActive={false} />
+            </BarChart>
+          )}</ChartFrame>
+        </Panel>
+      )}
+    </div>
+  );
+});
+
+/* \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 SHARED UI */
+
+function Panel({ title, subtitle, badge, children }: { title: string; subtitle?: string; badge?: string; children: React.ReactNode }) {
+  return (
+    <div className="glass rounded-2xl p-5">
+      <div className="mb-4 flex items-start justify-between gap-2">
+        <div>
+          <h3 className="font-display text-sm font-bold">{title}</h3>
+          {subtitle && <p className="text-[11px] text-muted-foreground">{subtitle}</p>}
+        </div>
+        {badge && <Badge variant="outline" className="text-[10px]">{badge}</Badge>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ChartFrame({ height, children }: { height: number; children: (width: number) => React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(600);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    const obs = new ResizeObserver(([entry]) => setWidth(Math.floor(entry.contentRect.width)));
+    obs.observe(ref.current);
+    return () => obs.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} style={{ width: "100%", height }} className="overflow-hidden">
+      {children(width)}
+    </div>
+  );
+}
+
+function Empty({ message }: { message: string }) {
+  return (
+    <div className="flex h-32 items-center justify-center text-center text-xs text-muted-foreground">
+      {message}
+    </div>
+  );
+}
+
+function RichTip({ meta, active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0]?.payload;
+  if (!d) return null;
+  const color = d.rag === "green" ? "var(--success)" : d.rag === "amber" ? "var(--warning)" : d.rag === "red" ? "var(--danger)" : "var(--muted-foreground)";
+  return (
+    <div className="glass min-w-36 rounded-xl border border-border/60 p-3 text-xs shadow-lg">
+      <p className="mb-1 font-bold">{label}</p>
+      <p style={{ color }} className="font-semibold tabular-nums">{d.rate?.toFixed(1)}%</p>
+      <p className="text-muted-foreground">{d.total?.toLocaleString()} tickets</p>
+      <p className="text-muted-foreground">{d.breaches?.toLocaleString()} breaches</p>
+      {d.delta !== undefined && d.delta !== 0 && (
+        <p className={d.delta > 0 ? "text-[color:var(--success)]" : "text-[color:var(--danger)]"}>
+          {d.delta > 0 ? "\u25b2" : "\u25bc"} {Math.abs(d.delta).toFixed(1)}pp vs prev
+        </p>
+      )}
+      <p className="mt-1 border-t border-border/40 pt-1 text-[10px] text-muted-foreground">
+        Target {meta.targetLabel}
+      </p>
+    </div>
+  );
+}
+
+/* helpers */
+function amberBound(meta: (typeof KPI_META)[KpiCode]): number {
+  return meta.isKM
+    ? meta.target * 1.1
+    : meta.target * 0.97;
+}
+
+function withDeltas<T extends { rate: number }>(data: T[]): (T & { delta?: number })[] {
+  return data.map((d, i) => ({
+    ...d,
+    delta: i === 0 ? undefined : d.rate - data[i - 1].rate,
+  }));
+}
+
+/* \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 KSL-5b PCMS CHART */
+
+function PcmsWeeklyChart({ counts }: { counts: ReturnType<typeof pcmsWeeklyCounts> }) {
+  const cats = Array.from(new Set(counts.flatMap((w) => w.categories.map((c) => c.category)))).slice(0, 6);
+  const data = counts.map((w) => {
+    const e: Record<string, unknown> = { label: weekLabel(w.week) };
+    cats.forEach((cat) => {
+      const found = w.categories.find((c) => c.category === cat);
+      e[cat] = found?.count ?? 0;
+    });
+    return e;
+  });
+  const COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "var(--chart-6)"];
+  return (
+    <ChartFrame height={260}>{(width) => (
+      <BarChart width={width} height={260} data={data} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+        <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
+        <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
+        <Tooltip />
+        <Legend wrapperStyle={{ fontSize: 11 }} />
+        {cats.map((cat, i) => (
+          <Bar key={cat} dataKey={cat} stackId="a" fill={COLORS[i % COLORS.length]} isAnimationActive={false}
+            radius={i === cats.length - 1 ? [2, 2, 0, 0] : undefined}
+          />
+        ))}
+      </BarChart>
+    )}</ChartFrame>
+  );
+}
+
+function PcmsAgentChart({ agents }: { agents: ReturnType<typeof pcmsTopAgents> }) {
+  return (
+    <ChartFrame height={220}>{(width) => (
+      <BarChart
+        width={width} height={220}
+        data={agents.map((a) => ({ name: a.agent, KO: a.koCount, NOK: a.nokCount }))}
+        margin={{ top: 10, right: 24, left: 0, bottom: 40 }}
+      >
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+        <XAxis dataKey="name" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} angle={-30} textAnchor="end" interval={0} />
+        <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
+        <Tooltip />
+        <Legend wrapperStyle={{ fontSize: 11 }} />
+        <Bar dataKey="KO"  fill="var(--danger)"  radius={[2, 2, 0, 0]} isAnimationActive={false} />
+        <Bar dataKey="NOK" fill="var(--warning)" radius={[2, 2, 0, 0]} isAnimationActive={false} />
+      </BarChart>
+    )}</ChartFrame>
+  );
+}
+
+function AgentTable({ agents }: { agents: ReturnType<typeof pcmsTopAgents> }) {
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>#</TableHead>
+            <TableHead>Agent</TableHead>
+            <TableHead className="text-right">KO Tickets</TableHead>
+            <TableHead className="text-right">NOK Tickets</TableHead>
+            <TableHead className="text-right">Total</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {agents.map((a, i) => (
+            <TableRow key={a.agent}>
+              <TableCell className="text-muted-foreground">{i + 1}</TableCell>
+              <TableCell className="font-medium">{a.agent}</TableCell>
+              <TableCell className="text-right tabular-nums">{a.koCount.toLocaleString()}</TableCell>
+              <TableCell className="text-right tabular-nums">{a.nokCount.toLocaleString()}</TableCell>
+              <TableCell className="text-right tabular-nums font-semibold">{(a.koCount + a.nokCount).toLocaleString()}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+function CategoryBreakdownList({ counts }: { counts: Array<{ category: string; count: number }> }) {
+  return (
+    <div className="space-y-1">
+      {counts.map(({ category: cat, count }) => (
+  <p key={cat} className="flex items-center gap-1.5">
+    <span className="h-2 w-2 rounded-full bg-muted-foreground" />
+    <span className="flex-1 truncate text-muted-foreground">{`Category ${cat}`}</span>
+    <span className="font-semibold tabular-nums">{count}</span>
+  </p>
+))}
+      </div>
+    </div>
+  );
+}
