@@ -1144,7 +1144,7 @@ const queue = activeQueue === "__none__" ? "" : activeQueue;
   const minY = values.length ? Math.floor(Math.min(...values, meta.target) - 1.5) : "auto";
   const maxY = values.length ? Math.ceil(Math.max(...values, meta.target) + 1.5) : "auto";
 
-  useEffect(() => {
+ useEffect(() => {
   console.log("queue diagnostics", {
     safe,
     month,
@@ -1153,7 +1153,7 @@ const queue = activeQueue === "__none__" ? "" : activeQueue;
     firstQueue: queues[0],
     weeklyCount: weeklyData.length,
   });
-}, [safe, month, queues, queue, weeklyData]);
+}, [safe, month, queues, queue]);
 
   return (
     <>
