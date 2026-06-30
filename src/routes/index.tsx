@@ -1104,7 +1104,7 @@ const queuesSection = React.memo(function queuessSection({
   const meta = KPI_META[safe];
 
   const queuess = useMemo(
-    () => QueueBreakdown(ds, safe, month),
+    () => queueBreakdown(ds, safe, month),
     [ds, safe, month],
   );
 
@@ -1614,7 +1614,7 @@ const QualityReopenSection = React.memo(function QualityReopenSection({ ds, mont
         const meta = KPI_META[code];
         const monthly = withDeltas(monthlySummary(ds, code).map((p) => ({ ...p, label: monthLabel(p.label) })));
         const weekly = withDeltas(weeklySummary(ds, code, { lastN: 6 }).map((p) => ({ ...p, label: weekLabel(p.label) })));
-        const queuess = QueueBreakdown(ds, code, month);
+        const queuess = queueBreakdown(ds, code, month);
         const amber = amberBound(meta);
         const dotColor = (rag: string) =>
           rag === "green" ? "var(--success)" : rag === "amber" ? "var(--warning)" : rag === "red" ? "var(--danger)" : "var(--muted-foreground)";
