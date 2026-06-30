@@ -1096,7 +1096,11 @@ const QueuesSection = React.memo(function QueuesSection({
   activeKpi: KpiCode;
   setActiveKpi: (k: KpiCode) => void;
 }) {
-  const safe = detected.includes(activeKpi) ? activeKpi : (detected[0] ?? "KSL-2c");
+  const safe = useMemo(
+    () => (detected.includes(activeKpi) ? activeKpi : (detected[0] ?? "KSL-2c")),
+    [detected, activeKpi],
+  );
+
   const meta = KPI_META[safe];
 
   const queues = useMemo(
@@ -1106,19 +1110,17 @@ const QueuesSection = React.memo(function QueuesSection({
 
   const [activeQueue, setActiveQueue] = useState<string>("__none__");
 
-useEffect(() => {
-  if (queues.length === 0) {
-    setActiveQueue("__none__");
-    return;
+  const prevQueuesRef = useRef<typeof queues | null>(null);
+  if (prevQueuesRef.current !== queues) {
+    prevQueuesRef.current = queues;
+    if (queues.length === 0) {
+      if (activeQueue !== "__none__") setActiveQueue("__none__");
+    } else if (activeQueue === "__none__" || !queues.some((q) => q.queue === activeQueue)) {
+      setActiveQueue(queues[0].queue);
+    }
   }
 
-  setActiveQueue((current) => {
-    if (current !== "__none__" && queues.some((q) => q.queue === current)) return current;
-    return queues[0].queue;
-  });
-}, [queues]);
-
-const queue = activeQueue === "__none__" ? "" : activeQueue;
+  const queue = activeQueue === "__none__" ? "" : activeQueue;
 
   const weekly = useMemo(() => {
     if (!queue) return [];
@@ -1128,9 +1130,10 @@ const queue = activeQueue === "__none__" ? "" : activeQueue;
     }));
   }, [ds, safe, queue]);
 
-  const weeklyData = withDeltas(weekly);
-  const amber = amberBound(meta);
+  const weeklyData = useMemo(() => withDeltas(weekly), [weekly]);
 
+  const amber = amberBound(meta);
+  
   const dotColor = (rag: string) =>
     rag === "green"
       ? "var(--success)"
