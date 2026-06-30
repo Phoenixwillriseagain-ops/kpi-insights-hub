@@ -1925,7 +1925,7 @@ const reasonMix = useMemo(() => {
     {c.id}. {c.label}
   </button>
 ))}
-            ))}
+         
           </div>
         </div>
         <div className="max-h-96 overflow-auto rounded-xl border border-border/50">
