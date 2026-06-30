@@ -43,7 +43,7 @@ function isoWeekStr(date: Date): string {
   return d.getUTCFullYear() + "-W" + (wk < 10 ? "0" : "") + wk;
 }
 
-// Named-header fallback helper (for files that don't match the index layout)
+// Named-header fallback helper (used by parseBreach / parseExcl)
 function makeCol(row: Record<string, unknown>) {
   const keys = Object.keys(row);
   return (...names: string[]) => {
@@ -62,51 +62,47 @@ export async function readWorkbook(file: File): Promise<XLSX.WorkBook> {
   return XLSX.read(buf, { type: "array" });
 }
 
-// Column index layout matching breaches-tracker config.js C_XLSX:
+// Column index layout — matches breaches-tracker config.js C_XLSX exactly:
 // 0:Incident Ticket  1:DATE_CLOSE  2:Status  3:Queue  4:Priority
 // 5:ISO_Language  6:Tool  7:TOPIC  8:SLA_Code  9:SLA_N
 // 10:Breach_Description  11:DATE_TIME_Breach
-// 12:COMPASS ID  13:Reason  14:AOS  15:Agent  16:BMS ID
-// 17:Comment  18:AOS Issue  19:Excluded  20:Jira  21:Week  22:Unique
+// 19:Excluded  21:Week
 const COL = {
   ticket:     0,
   date_close: 1,
-  status:     2,
   queue:      3,
-  priority:   4,
   lang:       5,
-  tool:       6,
-  topic:      7,
   sla_code:   8,
-  sla_n:      9,
-  breach_desc:10,
   breach_dt:  11,
   excluded:   19,
-  week:       21,
 };
 
 export function parseSla(wb: XLSX.WorkBook): Partial<Record<KpiCode, SlaRow[]>> {
   const out: Partial<Record<KpiCode, SlaRow[]>> = {};
+
   for (const sheetName of wb.SheetNames) {
-    const code = matchKpi(sheetName);
-    if (!code) continue;
+    if (sheetName === "Instructions") continue;
 
-    // Use array mode (header:1) — same as breaches-tracker — for reliable index access
+    // Array mode — same as breaches-tracker — guarantees positional index access
     const rawRows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sheetName], { header: 1, defval: "" });
-    if (rawRows.length < 2) continue; // skip empty or header-only sheets
+    if (rawRows.length < 2) continue;
 
-    // Detect if row[0] is a header row (string values) to skip it
+    // Skip header row if first cell looks like a label
     const firstRow = rawRows[0] as unknown[];
     const hasHeader = typeof firstRow[COL.ticket] === "string" &&
-      firstRow[COL.ticket].toString().toLowerCase().includes("ticket");
+      /ticket|incident|id/i.test(String(firstRow[COL.ticket]));
     const dataRows = hasHeader ? rawRows.slice(1) : rawRows;
-
-    const acc: SlaRow[] = out[code] ?? [];
 
     dataRows.forEach((r: unknown, ri: number) => {
       const row = r as unknown[];
+
+      // Route by SLA_Code column (col 8) — not by sheet name
+      const slaCode = String(row[COL.sla_code] ?? "").trim();
+      const code = matchKpi(slaCode);
+      if (!code) return; // skip rows with unknown/blank SLA code
+
       const ticketRaw = String(row[COL.ticket] ?? "").trim();
-      if (!ticketRaw) return; // skip blank rows
+      if (!ticketRaw) return;
       const ticket = ticketRaw || `__row_${ri}`;
 
       const d = parseDate(row[COL.date_close]);
@@ -116,81 +112,113 @@ export function parseSla(wb: XLSX.WorkBook): Partial<Record<KpiCode, SlaRow[]>> 
       const queue = normText(row[COL.queue], "Unknown");
       const language = normText(row[COL.lang], "unknown");
 
-      // Breach: check DATE_TIME_Breach (col 11) — non-empty = breach
+      // Breach: DATE_TIME_Breach (col 11) non-empty = breach
       const breachDt = String(row[COL.breach_dt] ?? "").trim();
-      const isBreach = !!breachDt && breachDt !== "0" && breachDt !== "";
+      const isBreach = !!breachDt && breachDt !== "0";
 
       const exclRaw = String(row[COL.excluded] ?? "").trim();
       const isExcluded = exclRaw === "1" || exclRaw.toUpperCase() === "Y" || exclRaw.toUpperCase() === "YES";
 
+      const acc = out[code] ?? [];
       acc.push({ ticket, month, week, queue, language, isBreach, isExcluded });
+      out[code] = acc;
     });
-
-    out[code] = acc;
   }
+
   return out;
 }
 
 export function parseBreach(wb: XLSX.WorkBook): Partial<Record<KpiCode, BreachRow[]>> {
   const out: Partial<Record<KpiCode, BreachRow[]>> = {};
+
   for (const sheetName of wb.SheetNames) {
-    const code = matchKpi(sheetName);
-    if (!code) continue;
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[sheetName], { defval: "" });
-    const acc: BreachRow[] = out[code] ?? [];
-    rows.forEach((r) => {
-      const col = makeCol(r);
-      const exclRaw = String(col("EXCLUDED", "IS_EXCLUDED", "EXCLUDE") || "").trim();
+    if (sheetName === "Instructions") continue;
+
+    const rawRows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sheetName], { header: 1, defval: "" });
+    if (rawRows.length < 2) continue;
+
+    const firstRow = rawRows[0] as unknown[];
+    const hasHeader = typeof firstRow[COL.ticket] === "string" &&
+      /ticket|incident|id/i.test(String(firstRow[COL.ticket]));
+    const dataRows = hasHeader ? rawRows.slice(1) : rawRows;
+
+    dataRows.forEach((r: unknown) => {
+      const row = r as unknown[];
+
+      const slaCode = String(row[COL.sla_code] ?? "").trim();
+      const code = matchKpi(slaCode);
+      if (!code) return;
+
+      const exclRaw = String(row[COL.excluded] ?? "").trim();
       const isExcluded = exclRaw === "1" || exclRaw.toUpperCase() === "Y";
       if (isExcluded) return;
-      const wv = String(col("WEEK", "WEEK_NUMBER", "WEEKNUMBER") || "");
-      let week = /^\d{4}-W\d{2}$/.test(wv) ? wv : "No week";
-      if (week === "No week") {
-        const d = parseDate(col("DATECLOSE", "DATE_CLOSE", "CLOSEDDATE", "CLOSEDATE"));
-        if (d) week = isoWeekStr(d);
-      }
-      const monV = String(col("MONTH", "PERIOD", "YEARMONTH") || "");
-      const month = /^\d{4}-\d{2}$/.test(monV) ? monV : (week !== "No week" ? week.slice(0, 7) : "unknown");
+
+      const breachDt = String(row[COL.breach_dt] ?? "").trim();
+      if (!breachDt || breachDt === "0") return; // no breach = not a breach row
+
+      const d = parseDate(row[COL.date_close]);
+      const week = d ? isoWeekStr(d) : "No week";
+      const month = d ? d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") : "unknown";
+
+      const acc = out[code] ?? [];
       acc.push({
-        ticket: String(col("TICKET", "TICKETID", "TICKET_ID", "ID", "CASEID") || ""),
+        ticket:  String(row[COL.ticket] ?? "").trim(),
         week,
         month,
-        queue: normText(col("Queue", "QUEUE", "TEAM", "GROUP", "DEPARTMENT"), "Unknown"),
-        agent: normText(col("AGENT", "AGENTNAME", "AGENT_NAME", "OWNER")),
-        reason: normText(col("REASON", "BREACH_REASON", "BREACHREASON")),
-        aos: normText(col("AOS", "SLA_TYPE", "SLATYPE", "TYPE")),
-        comment: normText(col("COMMENT", "COMMENTS", "NOTE", "NOTES")),
+        queue:   normText(row[COL.queue], "Unknown"),
+        agent:   normText(row[5 + 10] /* col 15 = Agent */),
+        reason:  normText(row[13] /* col 13 = Reason */),
+        aos:     normText(row[14] /* col 14 = AOS */),
+        comment: normText(row[17] /* col 17 = Comment */),
       });
+      out[code] = acc;
     });
-    out[code] = acc;
   }
+
   return out;
 }
 
 export function parseExcl(wb: XLSX.WorkBook): Partial<Record<KpiCode, ExclRow[]>> {
   const out: Partial<Record<KpiCode, ExclRow[]>> = {};
+
   for (const sheetName of wb.SheetNames) {
-    const code = matchKpi(sheetName);
-    if (!code) continue;
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[sheetName], { defval: "" });
-    const acc: ExclRow[] = out[code] ?? [];
-    rows.forEach((r) => {
-      const col = makeCol(r);
-      const ticket = String(col("TICKET", "TICKETID", "TICKET_ID", "ID", "CASEID", "INCIDENTTICKET", "TICKETNUMBER") || "").trim();
-      const exclVal = col("EXCLUDED", "IS_EXCLUDED", "EXCLUDE");
-      const isExcluded = exclVal === 1 || String(exclVal).trim() === "1";
-      if (!ticket || !isExcluded) return;
+    if (sheetName === "Instructions") continue;
+
+    const rawRows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sheetName], { header: 1, defval: "" });
+    if (rawRows.length < 2) continue;
+
+    const firstRow = rawRows[0] as unknown[];
+    const hasHeader = typeof firstRow[COL.ticket] === "string" &&
+      /ticket|incident|id/i.test(String(firstRow[COL.ticket]));
+    const dataRows = hasHeader ? rawRows.slice(1) : rawRows;
+
+    dataRows.forEach((r: unknown) => {
+      const row = r as unknown[];
+
+      const ticketRaw = String(row[COL.ticket] ?? "").trim();
+      if (!ticketRaw) return;
+
+      const exclRaw = String(row[COL.excluded] ?? "").trim();
+      const isExcluded = exclRaw === "1" || exclRaw.toUpperCase() === "Y" || exclRaw.toUpperCase() === "YES";
+      if (!isExcluded) return;
+
+      const slaCode = String(row[COL.sla_code] ?? "").trim();
+      const code = matchKpi(slaCode);
+      if (!code) return;
+
+      const acc = out[code] ?? [];
       acc.push({
-        ticket,
-        reason: String(col("REASON", "EXCLUSIONREASON", "EXCLUSION_REASON", "CAUSE") || ""),
-        comment: String(col("COMMENT", "COMMENTS", "NOTE", "NOTES") || ""),
-        jira: String(col("JIRA", "JIRAID", "JIRA_ID", "JIRAREF", "JIRAREFERENCE") || ""),
-        date: String(col("DATECLOSE", "DATE_CLOSE", "CLOSEDDATE", "DATE") || ""),
-        priority: String(col("PRIORITY", "PRIO") || ""),
+        ticket:   ticketRaw,
+        reason:   normText(row[13]),
+        comment:  normText(row[17]),
+        jira:     normText(row[20]),
+        date:     String(row[COL.date_close] ?? ""),
+        priority: normText(row[4]),
       });
+      out[code] = acc;
     });
-    out[code] = acc;
   }
+
   return out;
 }
 
@@ -248,10 +276,10 @@ export function buildDataset(
   });
 
   console.log("buildDataset result", {
-    sla: Object.keys(ds.sla).length,
-    breach: Object.keys(ds.breach).map((k) => [k, ds.breach[k as KpiCode]?.length ?? 0]),
+    sla: Object.fromEntries(Object.entries(ds.sla).map(([k, v]) => [k, v?.length ?? 0])),
+    breach: Object.fromEntries(Object.entries(ds.breach).map(([k, v]) => [k, v?.length ?? 0])),
     pcms: ds.pcms.length,
-    months: ds.months.length,
+    months: ds.months,
     weeks: ds.weeks.length,
   });
 
