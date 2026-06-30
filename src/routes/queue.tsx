@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useCallback, useRef, useMemo } from "react";
+import * as XLSX from "xlsx";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -172,7 +173,7 @@ export default function QueueAnalyzerPage() {
 
   const fileRef = useRef<HTMLInputElement>(null);
 
-  /* ── parse ──────────────────────────────────────────────────── */
+  /* ── parse CSV text into rows ───────────────────────────────── */
   const parseCSV = useCallback((text: string, name: string) => {
     const { fields, data: raw } = parseCSVText(text);
     if (!raw.length) return;
@@ -208,10 +209,26 @@ export default function QueueAnalyzerPage() {
     setRows(parsed); setTab("overview"); setTPage(0); setTSearch("");
   }, []);
 
+  /* ── file handler — supports .csv and .xlsx/.xls ────────────── */
   const handleFile = (f: File) => {
-    const reader = new FileReader();
-    reader.onload = e => parseCSV(e.target?.result as string, f.name.replace(/\.csv$/i, ""));
-    reader.readAsText(f);
+    const name = f.name.replace(/\.(csv|xlsx|xls)$/i, "");
+    const isExcel = /\.(xlsx|xls)$/i.test(f.name);
+
+    if (isExcel) {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: "array", cellDates: true });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const csv = XLSX.utils.sheet_to_csv(firstSheet);
+        parseCSV(csv, name);
+      };
+      reader.readAsArrayBuffer(f);
+    } else {
+      const reader = new FileReader();
+      reader.onload = e => parseCSV(e.target?.result as string, name);
+      reader.readAsText(f);
+    }
   };
 
   /* ── filtered rows ──────────────────────────────────────────── */
@@ -379,7 +396,7 @@ export default function QueueAnalyzerPage() {
             {hasData && (
               <>
                 <label htmlFor="qa-file" className="cursor-pointer inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
-                  <UploadIcon /> Upload CSV
+                  <UploadIcon /> Upload file
                 </label>
                 <button onClick={reset} className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors">
                   <RefreshIcon /> New file
@@ -393,7 +410,7 @@ export default function QueueAnalyzerPage() {
                   }}
                   className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
                 >
-                  <DownloadIcon /> Export
+                  <DownloadIcon /> Export CSV
                 </button>
               </>
             )}
@@ -401,7 +418,7 @@ export default function QueueAnalyzerPage() {
         </div>
       </header>
 
-      <input ref={fileRef} id="qa-file" type="file" accept=".csv" className="sr-only"
+      <input ref={fileRef} id="qa-file" type="file" accept=".csv,.xlsx,.xls" className="sr-only"
         onChange={e => { const f=e.target.files?.[0]; if(f) handleFile(f); e.target.value=""; }}/>
 
       <main className="mx-auto max-w-screen-xl px-6 py-8">
@@ -411,7 +428,7 @@ export default function QueueAnalyzerPage() {
           <div
             onDragOver={e=>{e.preventDefault();setDrag(true);}}
             onDragLeave={()=>setDrag(false)}
-            onDrop={e=>{e.preventDefault();setDrag(false);const f=e.dataTransfer.files[0];if(f?.name.endsWith(".csv"))handleFile(f);}}
+            onDrop={e=>{e.preventDefault();setDrag(false);const f=e.dataTransfer.files[0];if(f&&/\.(csv|xlsx|xls)$/i.test(f.name))handleFile(f);}}
           >
             <label
               htmlFor="qa-file"
@@ -424,11 +441,13 @@ export default function QueueAnalyzerPage() {
                 <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
               </svg>
               <div>
-                <h2 className="text-xl font-semibold">Drop your queue CSV here</h2>
-                <p className="mt-1 text-sm text-muted-foreground max-w-xs mx-auto">Upload a CSV export from your ticketing system. Columns are auto-detected.</p>
+                <h2 className="text-xl font-semibold">Drop your queue file here</h2>
+                <p className="mt-1 text-sm text-muted-foreground max-w-xs mx-auto">
+                  Upload a <strong>CSV</strong> or <strong>Excel (.xlsx / .xls)</strong> export from your ticketing system. Columns are auto-detected.
+                </p>
               </div>
               <span className="pointer-events-none rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Choose File</span>
-              <p className="text-xs text-muted-foreground/60">Processed entirely in your browser · No data leaves this page</p>
+              <p className="text-xs text-muted-foreground/60">Supports .csv · .xlsx · .xls · Processed entirely in your browser · No data leaves this page</p>
             </label>
             <div className="mt-8">
               <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground mb-3">Or try with sample data</p>
