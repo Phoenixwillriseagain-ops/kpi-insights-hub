@@ -52,27 +52,41 @@ const COLORS = [
 ];
 
 /* ── column-detection hints ───────────────────────────────────── */
+// NOTE: order matters — more specific/exact names must come first.
+// Do NOT include names that overlap with other fields (e.g. sla_n belongs
+// to status/priority, NOT queue).
 const COL_HINTS: Record<string, string[]> = {
-  id:          ["id","ticket_id","ticketid","case_id","number","ref","reference",
-                "incident_ticket","incidentticket","incident ticket"],
-  created:     ["created","created_at","createdat","date","open_date","opened","submitted","timestamp",
-                "date_open","dateopen","date_time_breach","datetimebreach"],
-  updated:     ["updated","updated_at","modified","resolved_at","closed_at","last_update",
-                "date_close","dateclose"],
-  status:      ["status","state","ticket_status","sla_code","slacode"],
-  queue:       ["queue","group","team","department","category","type","topic","sla_n","slan"],
+  id:          ["incident ticket","incidentticket","incident_ticket",
+                "id","ticket_id","ticketid","case_id","number","ref","reference"],
+  created:     ["date_time_breach","datetimebreach",
+                "created","created_at","createdat","date","open_date","opened","submitted","timestamp",
+                "date_open","dateopen"],
+  updated:     ["date_close","dateclose",
+                "updated","updated_at","modified","resolved_at","closed_at","last_update"],
+  status:      ["sla_code","slacode",
+                "status","state","ticket_status"],
+  // queue: only exact queue/group/team/department names — no SLA field names
+  queue:       ["queue","group","team","department","category","type","topic"],
   agent:       ["agent","assigned","assignee","owner","handler","resolved_by","assigned_to"],
-  subject:     ["subject","title","summary","description","issue","topic","breach_description","breachdescription"],
-  priority:    ["priority","severity","urgency","sla_code","slacode"],
+  subject:     ["breach_description","breachdescription",
+                "subject","title","summary","description","issue"],
+  priority:    ["sla_n","slan","priority","severity","urgency"],
   handle_time: ["handle_time","handling_time","duration","time_spent","resolution_time","ttr","tat","handle_time_h"],
 };
 
 function detectCol(headers: string[], key: string): string | null {
   const hints = COL_HINTS[key];
-  const h = headers.map(x => x.toLowerCase().replace(/[\s_.\-]/g, ""));
+  const normalized = headers.map(x => x.toLowerCase().replace(/[\s_.\-]/g, ""));
+  // Pass 1: exact match only
   for (const hint of hints) {
     const norm = hint.replace(/[\s_.\-]/g, "");
-    const idx = h.findIndex(x => x === norm || x.startsWith(norm) || norm.startsWith(x));
+    const idx = normalized.findIndex(x => x === norm);
+    if (idx > -1) return headers[idx];
+  }
+  // Pass 2: prefix / contains match (fallback)
+  for (const hint of hints) {
+    const norm = hint.replace(/[\s_.\-]/g, "");
+    const idx = normalized.findIndex(x => x.startsWith(norm) || norm.startsWith(x));
     if (idx > -1) return headers[idx];
   }
   return null;
@@ -110,13 +124,12 @@ const isBreach   = (s: string) => /breach|overdue|escalat/i.test(s);
 /* ── xlsx: pick first sheet with actual data ──────────────────── */
 function pickSheetCsv(workbook: XLSX.WorkBook): string {
   for (const name of workbook.SheetNames) {
+    if (name === "Instructions") continue;
     const sheet = workbook.Sheets[name];
     const csv = XLSX.utils.sheet_to_csv(sheet);
-    // need at least a header line + one data line, both non-empty
     const lines = csv.split("\n").filter(l => l.replace(/,/g, "").trim().length > 0);
     if (lines.length >= 2) return csv;
   }
-  // fallback to first sheet
   return XLSX.utils.sheet_to_csv(workbook.Sheets[workbook.SheetNames[0]]);
 }
 
@@ -235,7 +248,6 @@ export default function QueueAnalyzerPage() {
       reader.onload = e => {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array", cellDates: true });
-        // pick the first sheet that actually has data rows (skips Instructions etc.)
         const csv = pickSheetCsv(workbook);
         parseCSV(csv, name);
       };
@@ -261,17 +273,14 @@ export default function QueueAnalyzerPage() {
     });
   }, [allRows, fQueue, fStatus, fAgent, fFrom, fTo]);
 
-  /* keep rows in sync with filtered */
   useMemo(() => setRows(filtered), [filtered]);
 
-  /* ── unique filter options ──────────────────────────────────── */
   const uniq = (fn: (r: ParsedRow) => string) =>
     [...new Set(allRows.map(fn).filter(Boolean))].sort();
   const queues   = uniq(r => r.queue  ?? "");
   const statuses = uniq(r => r.status ?? "");
   const agents   = uniq(r => r.agent  ?? "");
 
-  /* ── KPIs ───────────────────────────────────────────────────── */
   const kpis = useMemo(() => {
     const total    = rows.length;
     const resolved = rows.filter(r => isResolved(r.status ?? "")).length;
@@ -284,7 +293,6 @@ export default function QueueAnalyzerPage() {
       resRate: total ? Math.round(resolved / total * 100) : 0 };
   }, [rows]);
 
-  /* ── chart data ─────────────────────────────────────────────── */
   const statusData = useMemo(() => {
     const m = groupCount(rows, r => r.status || "(unknown)");
     return Object.entries(m).map(([name, value]) => ({ name, value }));
@@ -367,7 +375,6 @@ export default function QueueAnalyzerPage() {
     return { months: months.map(m => ({ month: m, ...monthMap[m] })), statusList };
   }, [rows]);
 
-  /* ── tickets tab ────────────────────────────────────────────── */
   const ticketRows = useMemo(() => {
     const q = tSearch.toLowerCase();
     if (!q) return rows;
@@ -377,22 +384,15 @@ export default function QueueAnalyzerPage() {
   const tStart = tPage * tPerPage;
   const tPageRows = ticketRows.slice(tStart, tStart + tPerPage);
 
-  /* ── summary dates ──────────────────────────────────────────── */
   const allDates = allRows.filter(r=>r._createdDate).map(r=>r._createdDate!).sort((a,b)=>+a-+b);
   const dateSpan = allDates.length >= 2 ? `${fmtDate(allDates[0])} – ${fmtDate(allDates[allDates.length-1])}` : "";
 
-  /* ── reset ──────────────────────────────────────────────────── */
   const reset = () => { setAllRows([]); setRows([]); setFileName(""); setTab("overview"); };
 
   const hasData = allRows.length > 0;
 
-  /* ══════════════════════════════════════════════════════════════
-     RENDER
-  ══════════════════════════════════════════════════════════════ */
   return (
     <div className="min-h-screen bg-background">
-
-      {/* ── HEADER ──────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 border-b bg-card/80 backdrop-blur-sm">
         <div className="mx-auto flex max-w-screen-xl items-center gap-4 px-6 h-14">
           <Link to="/" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
@@ -438,8 +438,6 @@ export default function QueueAnalyzerPage() {
         onChange={e => { const f=e.target.files?.[0]; if(f) handleFile(f); e.target.value=""; }}/>
 
       <main className="mx-auto max-w-screen-xl px-6 py-8">
-
-        {/* ── UPLOAD SCREEN ─────────────────────────────────── */}
         {!hasData && (
           <div
             onDragOver={e=>{e.preventDefault();setDrag(true);}}
@@ -477,10 +475,8 @@ export default function QueueAnalyzerPage() {
           </div>
         )}
 
-        {/* ── DASHBOARD ─────────────────────────────────────── */}
         {hasData && (
           <div>
-            {/* title */}
             <div className="mb-6">
               <h1 className="text-2xl font-bold tracking-tight">{fileName || "Queue Analysis"}</h1>
               <p className="text-sm text-muted-foreground mt-0.5">
@@ -488,7 +484,6 @@ export default function QueueAnalyzerPage() {
               </p>
             </div>
 
-            {/* KPI strip */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
               {[
                 { label:"Total Tickets",  value: kpis.total.toLocaleString(),   sub: "in selection",             accent: "text-primary" },
@@ -506,7 +501,6 @@ export default function QueueAnalyzerPage() {
               ))}
             </div>
 
-            {/* filter bar */}
             <div className="flex flex-wrap gap-3 items-end mb-6">
               {[
                 { label:"Queue",  id:"fq",  val:fQueue,  set:setFQueue,  opts:queues },
@@ -539,7 +533,6 @@ export default function QueueAnalyzerPage() {
               </button>
             </div>
 
-            {/* tabs */}
             <div className="flex gap-0.5 border-b mb-6">
               {["overview","agents","queues","trends","tickets"].map(t => (
                 <button key={t} onClick={()=>{setTab(t);setTPage(0);}}
@@ -550,7 +543,6 @@ export default function QueueAnalyzerPage() {
               ))}
             </div>
 
-            {/* ── TAB: OVERVIEW ─────────────────────────────── */}
             {tab==="overview" && (
               <div className="space-y-4">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -598,7 +590,6 @@ export default function QueueAnalyzerPage() {
               </div>
             )}
 
-            {/* ── TAB: AGENTS ──────────────────────────────── */}
             {tab==="agents" && (
               <div className="space-y-4">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -656,7 +647,6 @@ export default function QueueAnalyzerPage() {
               </div>
             )}
 
-            {/* ── TAB: QUEUES ──────────────────────────────── */}
             {tab==="queues" && (
               <div className="space-y-4">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -710,7 +700,6 @@ export default function QueueAnalyzerPage() {
               </div>
             )}
 
-            {/* ── TAB: TRENDS ──────────────────────────────── */}
             {tab==="trends" && (
               <div className="space-y-4">
                 <ChartPanel title="Weekly Volume Trend">
@@ -756,7 +745,6 @@ export default function QueueAnalyzerPage() {
               </div>
             )}
 
-            {/* ── TAB: TICKETS ─────────────────────────────── */}
             {tab==="tickets" && (
               <div>
                 <div className="flex flex-wrap gap-3 items-end mb-4">
@@ -803,7 +791,6 @@ export default function QueueAnalyzerPage() {
                 </div>
               </div>
             )}
-
           </div>
         )}
       </main>
@@ -811,7 +798,6 @@ export default function QueueAnalyzerPage() {
   );
 }
 
-/* ── small reusable chart panel ─────────────────────────────── */
 function ChartPanel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border bg-card shadow-sm overflow-hidden">
@@ -823,7 +809,6 @@ function ChartPanel({ title, children }: { title: string; children: React.ReactN
   );
 }
 
-/* ── micro icons ────────────────────────────────────────────── */
 function UploadIcon() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
 }
